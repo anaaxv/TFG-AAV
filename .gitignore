@@ -47,3 +47,8 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Datos pesados del proyecto TCGA y resultados
+GDCdata/
+data/
+*.rds
