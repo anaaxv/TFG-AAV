@@ -261,7 +261,7 @@ preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Expe
   dgl<-DGEList(counts=counts,group=group) #creamos la dgelist, estructura base para edgeR
   
   info_genes<-as.data.frame(rowData(expr_data))
-  info_genes$id_cruce<-sub("\\..*", "", rownames(info_genes))
+  info_genes$id_cruce<-sub("\\..*", "", rownames(info_genes)) #el id_cruce es el ensembl id sin el nº de versión
   dgl$genes<-info_genes[, c("id_cruce", "gene_name")]
   
   #Filtrado de genes poco expresados:
@@ -482,14 +482,16 @@ complete_edgeR_analysis<-function(expr_data,
                                   reference_level="Normal",
                                   lfc_threshold=1, #añadir tb para el bvolcano otra que sea para logfc 2
                                   fdr_threshold=0.05, #mejor 5%??
-                                  preprocess_plots=list(boxplot=FALSE, mds=FALSE, pca=FALSE), #CAMBIARRR
-                                  analysis_plots=list(bcv=FALSE, ma=FALSE, volcano=FALSE, hm=TRUE)){
+                                  preprocess_plots=list(boxplot=TRUE, mds=TRUE, pca=TRUE), #CAMBIARR
+                                  analysis_plots=list(bcv=TRUE, ma=TRUE, volcano=TRUE, hm=TRUE),
+                                  plot_prefix="Edge R"){
   #Preprocesamiento:
   pre<-preprocess_edgeR(
     expr_data=expr_data,
     group_variable=group_variable,
     reference_level=reference_level,
-    plots=preprocess_plots
+    plots=preprocess_plots,
+    plot_prefix = plot_prefix
   )
   
   #Análisis diferencial:
@@ -498,7 +500,8 @@ complete_edgeR_analysis<-function(expr_data,
     group=pre$group,
     lfc_threshold=lfc_threshold,
     fdr_threshold=fdr_threshold,
-    plots=analysis_plots
+    plots=analysis_plots,
+    plot_prefix = plot_prefix
   )
   return(results)
 }
@@ -508,7 +511,7 @@ analysis_voom<-function(expr_data,
                         reference_level="Normal",
                         lfc_threshold=1,
                         fdr_threshold=0.05,
-                        plots=list(volcano=FALSE, hm=TRUE), #CAMBIARRR
+                        plots=list(volcano=TRUE, hm=TRUE), 
                         plot_prefix="Voom"){
   
   info_genes <- as.data.frame(rowData(expr_data))
@@ -628,7 +631,7 @@ analysis_voom<-function(expr_data,
 }
 
 #Análisis EdgeR y voom para LUAD:
-res_LUAD_edgeR<-complete_edgeR_analysis(expr_LUAD_def)
+res_LUAD_edgeR<-complete_edgeR_analysis(expr_LUAD_def, plot_prefix="LUAD - Edge R")
 res_LUAD_voom<-analysis_voom(expr_LUAD_def)
 saveRDS(res_LUAD_edgeR,"data/res_LUAD_edgeR.rds")
 saveRDS(res_LUAD_voom,"data/res_LUAD_voom.rds")
@@ -640,7 +643,7 @@ common_deg_LUAD <- intersect(
 saveRDS(common_deg_LUAD,"data/common_deg_LUAD.rds")
 
 #Análisis EdgeR y voom para LUSC:
-res_LUSC_edgeR<-complete_edgeR_analysis(expr_LUSC_def)
+res_LUSC_edgeR<-complete_edgeR_analysis(expr_LUSC_def, plot_prefix="LUSC - Edge R")
 res_LUSC_voom<-analysis_voom(expr_LUSC_def)
 saveRDS(res_LUSC_edgeR,"data/res_LUSC_edgeR.rds")
 saveRDS(res_LUSC_voom,"data/res_LUSC_voom.rds")
