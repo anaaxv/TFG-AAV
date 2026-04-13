@@ -51,4 +51,18 @@ rsconnect/
 # Datos pesados del proyecto TCGA y resultados
 GDCdata/
 data/
+Data/
+
+# 2. Ignorar todos los objetos y temporales de R
 *.rds
+*.RData
+*.RDataTmp
+.RData
+.RDataTmp
+
+# 3. Ignorar todas las imágenes y gráficos que genere el código
+*.png
+*.svg
+*.pdf
+*.jpeg
+*.jpg

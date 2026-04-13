@@ -1,0 +1,7 @@
+id	filename	md5	size	state
+7aaee8d4-3bea-4dfc-b392-c7aaa3e9a550	7aaee8d4-3bea-4dfc-b392-c7aaa3e9a550/nationwidechildrens.org_clinical_patient_lusc.txt	ff3b565da71c8489a9451cd19b6e5c02	708106	validated
+950030cb-9959-438a-8da6-dc32cc2571e6	950030cb-9959-438a-8da6-dc32cc2571e6/nationwidechildrens.org_clinical_follow_up_v1.0_lusc.txt	015a526457db27886ec36f01fa0c0145	241707	validated
+9a6c94bd-8c30-4444-9fc7-efe2c33dfc6c	9a6c94bd-8c30-4444-9fc7-efe2c33dfc6c/nationwidechildrens.org_clinical_nte_lusc.txt	d7e4a877647078e10e575db35e60c6dd	8645	validated
+b5cceec9-8006-45e1-9f92-949c23d594bc	b5cceec9-8006-45e1-9f92-949c23d594bc/nationwidechildrens.org_clinical_drug_lusc.txt	b9619f7240d05e307845bf9a6c7c81ab	146393	validated
+c9691f4c-91c6-4775-85af-4339d9224105	c9691f4c-91c6-4775-85af-4339d9224105/nationwidechildrens.org_clinical_radiation_lusc.txt	fa8d7cf4620cd62478a354168fd98b6e	19389	validated
+f1cb9e8d-9d99-45d8-b189-afaf772dd477	f1cb9e8d-9d99-45d8-b189-afaf772dd477/nationwidechildrens.org_clinical_omf_v4.0_lusc.txt	0326c15e2cec9833a9165b28ab37a943	38505	validated
