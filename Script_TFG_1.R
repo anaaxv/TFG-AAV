@@ -26,6 +26,10 @@ if (!require("pheatmap", quietly = TRUE))
 if (!require("ggrepel", quietly = TRUE))
   install.packages("ggrepel")
 
+if (!require("ggvenn", quietly = TRUE))
+  install.packages("ggvenn")
+
+
 #Cargamos las librerías que vamos a usar:
 library(TCGAbiolinks)
 library(SummarizedExperiment)
@@ -37,6 +41,7 @@ library(ggplot2)
 library(biomaRt)
 library(pheatmap)
 library(ggrepel)
+library(ggvenn)
 
 #Definimos la ruta al directorio en el que se descargarán los datos y lo creamos:
 dir_gdc <- "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TCGA/GDCdata" #CAMBIAR EN EL FUTURO
@@ -364,7 +369,7 @@ analysis_edgeR<-function(dgl,
   up<-subset(significant, logFC>0) #Sobreexpresado en tumor
   down<-subset(significant, logFC<0) #Infraexpresado en tumor
   
-  cat("Número de DEGs (voom):", nrow(significant), " (Up:", nrow(up_genes), ", Down:", nrow(down_genes), ")\n")
+  cat("Número de DEGs (EdgeR):", nrow(significant), " (Up:", nrow(up), ", Down:", nrow(down), ")\n")
   
   if(plots$bcv) {
     plotBCV(dgl, main=paste(plot_prefix,"- BCV Plot"))
@@ -425,36 +430,34 @@ analysis_edgeR<-function(dgl,
   if (plots$hm && nrow(significant) > 0) {
     # 1. Seleccionar los IDs de los top genes
     top_genes_hm <- significant %>%
-      arrange(adj.P.Val) %>% # O FDR en edgeR
+      dplyr::arrange(FDR) %>% 
       head(50) %>%
-      pull(id_cruce)
+      dplyr::pull(id_cruce)
     
-    # 2. Extraer los counts (v$E para voom o logCPM para edgeR)
-    # Suponiendo que estamos en voom (en edgeR usarías el objeto logCPM)
-    heatmap_data <- v$E 
+    # 2. Extraer los counts (Para edgeR usamos logCPM)
+    heatmap_data <- cpm(dgl, log=TRUE) # <<-- CORREGIDO
     rownames(heatmap_data) <- sub("\\..*", "", rownames(heatmap_data))
     heatmap_data <- heatmap_data[rownames(heatmap_data) %in% top_genes_hm, ]
     
-    # --- NUEVO: ORDENAR LAS MUESTRAS POR GRUPO ---
-    # Creamos un índice para ordenar: primero Normal, luego Tumor (según tus niveles)
-    orden_muestras <- order(group) # <<-- CAMBIO: Obtiene el orden de los factores
-    heatmap_data <- heatmap_data[, orden_muestras] # <<-- CAMBIO: Reordena columnas
+    # --- ORDENAR LAS MUESTRAS POR GRUPO ---
+    orden_muestras <- order(group) 
+    heatmap_data <- heatmap_data[, orden_muestras] 
     
-    # 3. Preparar la anotación con el nuevo orden
-    annotation_col <- data.frame(Group = group[orden_muestras]) # <<-- CAMBIO
+    # 3. Preparar la anotación
+    annotation_col <- data.frame(Group = group[orden_muestras]) 
     rownames(annotation_col) <- colnames(heatmap_data)
     
     # 4. Dibujar el heatmap
-    pheatmap(
+    pheatmap::pheatmap(
       heatmap_data, 
       scale = "row", 
       annotation_col = annotation_col,
-      show_rownames = FALSE, 
+      show_rownames = (nrow(heatmap_data) < 50), # Mostrar nombres si son pocos
       show_colnames = FALSE,
-      cluster_cols = FALSE,           # <<-- CAMBIO: Crucial para que respete el orden manual
-      cluster_rows = TRUE,            # Los genes sí los dejamos agrupados por parecido
+      cluster_cols = FALSE,           # Mantiene el orden Normal vs Tumor
+      cluster_rows = TRUE,            
       clustering_distance_rows = "correlation", 
-      main = paste(plot_prefix, "- Heatmap (Grouped by Condition)")
+      main = paste(plot_prefix, "- Heatmap")
     )
   }
   
@@ -489,10 +492,10 @@ return(list(
 complete_edgeR_analysis<-function(expr_data,
                                   group_variable="sample_type",
                                   reference_level="Normal",
-                                  lfc_threshold=1, #añadir tb para el bvolcano otra que sea para logfc 2
-                                  fdr_threshold=0.05, #mejor 5%??
-                                  preprocess_plots=list(boxplot=TRUE, mds=TRUE, pca=TRUE), #CAMBIARR
-                                  analysis_plots=list(bcv=TRUE, ma=TRUE, volcano=TRUE, hm=TRUE),
+                                  lfc_threshold=2, #añadir tb para el bvolcano otra que sea para logfc 2
+                                  fdr_threshold=0.01, #mejor 5%??
+                                  preprocess_plots=list(boxplot=FALSE, mds=FALSE, pca=TRUE), #CAMBIARR
+                                  analysis_plots=list(bcv=FALSE, ma=FALSE, volcano=TRUE, hm=TRUE),
                                   plot_prefix="Edge R"){
   #Preprocesamiento:
   pre<-preprocess_edgeR(
@@ -518,9 +521,9 @@ complete_edgeR_analysis<-function(expr_data,
 analysis_voom<-function(expr_data,
                         group_variable="sample_type",
                         reference_level="Normal",
-                        lfc_threshold=1,
-                        fdr_threshold=0.05,
-                        plots=list(volcano=FALSE, hm=TRUE), 
+                        lfc_threshold=2,
+                        fdr_threshold=0.01,
+                        plots=list(volcano=TRUE, hm=TRUE), 
                         base_folder="data",
                         plot_prefix="Voom"){
   
@@ -634,8 +637,8 @@ analysis_voom<-function(expr_data,
     
     # --- NUEVO: ORDENAR LAS MUESTRAS POR GRUPO ---
     # Creamos un índice para ordenar: primero Normal, luego Tumor (según tus niveles)
-    orden_muestras <- order(group) # <<-- CAMBIO: Obtiene el orden de los factores
-    heatmap_data <- heatmap_data[, orden_muestras] # <<-- CAMBIO: Reordena columnas
+    orden_muestras <- order(group)
+    heatmap_data <- heatmap_data[, orden_muestras] 
     
     # 3. Preparar la anotación con el nuevo orden
     annotation_col <- data.frame(Group = group[orden_muestras]) # <<-- CAMBIO
@@ -651,7 +654,7 @@ analysis_voom<-function(expr_data,
       cluster_cols = FALSE,           # <<-- CAMBIO: Crucial para que respete el orden manual
       cluster_rows = TRUE,            # Los genes sí los dejamos agrupados por parecido
       clustering_distance_rows = "correlation", 
-      main = paste(plot_prefix, "- Heatmap (Grouped by Condition)")
+      main = paste(plot_prefix, "- Heatmap")
     )
   }
   
@@ -663,7 +666,7 @@ analysis_voom<-function(expr_data,
   
   # Guardar DEGs significativos
   write.table(significant, 
-              file=file.path(results_folder, paste0(plot_prefix, "_DEGs",fdr_threshold,".txt")),
+              file=file.path(results_folder, paste0(plot_prefix, "_DEGs_FDR_",fdr_threshold,"_LFC_",lfc_threshold,".txt")),
               quote=FALSE, sep="\t", row.names=FALSE) 
   
   # Guardar tabla completa
@@ -683,14 +686,14 @@ analysis_voom<-function(expr_data,
 #Análisis EdgeR y voom para LUAD:
 res_LUAD_edgeR<-complete_edgeR_analysis(expr_LUAD_def, plot_prefix="LUAD - Edge R")
 res_LUAD_voom<-analysis_voom(expr_LUAD_def, plot_prefix="LUAD - Voom")
-saveRDS(res_LUAD_edgeR,"data/res_LUAD_edgeR.rds")
+saveRDS(res_LUAD_edgeR,"data/res_LUAD_edgeRFDR001LFC2.rds")
 saveRDS(res_LUAD_voom,"data/res_LUAD_voom.rds")
 
 common_deg_LUAD <- intersect(
   res_LUAD_edgeR$significant$id_cruce,
   res_LUAD_voom$significant$id_cruce
 )
-saveRDS(common_deg_LUAD,"data/common_deg_LUAD.rds")
+saveRDS(common_deg_LUAD,"data/common_deg_LUADFDR001LFC2.rds")
 
 #Análisis EdgeR y voom para LUSC:
 res_LUSC_edgeR<-complete_edgeR_analysis(expr_LUSC_def, plot_prefix="LUSC - Edge R")
@@ -702,7 +705,34 @@ common_deg_LUSC <- intersect(
   res_LUSC_edgeR$significant$id_cruce,
   res_LUSC_voom$significant$id_cruce
 )
-saveRDS(common_deg_LUSC,"data/common_deg_LUSC.rds")
+saveRDS(common_deg_LUSC,"data/common_deg_LUSCFDR001_LFC2.rds")
 
 common_lung_deg<-intersect(common_deg_LUAD, common_deg_LUSC)
-saveRDS(common_lung_deg,"data/common_lung_deg.rds")
+saveRDS(common_lung_deg,"data/common_lung_degFDR001_LFC2.rds")
+
+
+###DIAGRAMAS DE Venn MUY FEOS
+
+lista_LUAD <- list(
+  EdgeR = res_LUAD_edgeR$significant$id_cruce,
+  Voom  = res_LUAD_voom$significant$id_cruce
+)
+
+ggvenn(lista_LUAD, fill_color = c("#0073C2FF", "#EFC000FF")) +
+  labs(title = "LUAD: Consenso EdgeR vs Voom")
+
+lista_LUSC <- list(
+  EdgeR = res_LUSC_edgeR$significant$id_cruce,
+  Voom  = res_LUSC_voom$significant$id_cruce
+)
+
+ggvenn(lista_LUSC, fill_color = c("#0073C2FF", "#EFC000FF")) +
+  labs(title = "LUSC: Consenso EdgeR vs Voom")
+
+lista_lung <- list(
+  `LUAD` = common_deg_LUAD,
+  `LUSC` = common_deg_LUSC
+)
+
+ggvenn(lista_lung, fill_color = c("#CD5C5C", "#4682B4")) +
+  labs(title = "Genes compartidos entre LUAD y LUSC")
