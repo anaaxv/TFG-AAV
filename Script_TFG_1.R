@@ -494,8 +494,8 @@ complete_edgeR_analysis<-function(expr_data,
                                   reference_level="Normal",
                                   lfc_threshold=2, #añadir tb para el bvolcano otra que sea para logfc 2
                                   fdr_threshold=0.01, #mejor 5%??
-                                  preprocess_plots=list(boxplot=FALSE, mds=FALSE, pca=TRUE), #CAMBIARR
-                                  analysis_plots=list(bcv=FALSE, ma=FALSE, volcano=TRUE, hm=TRUE),
+                                  preprocess_plots=list(boxplot=TRUE, mds=TRUE, pca=TRUE), #CAMBIARR
+                                  analysis_plots=list(bcv=TRUE, ma=TRUE, volcano=TRUE, hm=TRUE),
                                   plot_prefix="Edge R"){
   #Preprocesamiento:
   pre<-preprocess_edgeR(
@@ -683,32 +683,54 @@ analysis_voom<-function(expr_data,
   ))
 }
 
-#Análisis EdgeR y voom para LUAD:
-res_LUAD_edgeR<-complete_edgeR_analysis(expr_LUAD_def, plot_prefix="LUAD - Edge R")
-res_LUAD_voom<-analysis_voom(expr_LUAD_def, plot_prefix="LUAD - Voom")
-saveRDS(res_LUAD_edgeR,"data/res_LUAD_edgeRFDR001LFC2.rds")
+#Análisis EdgeR LUAD:
+res_LUAD_edgeR<-complete_edgeR_analysis(expr_LUAD_def,
+                                        lfc_threshold = 1,
+                                        fdr_threshold = 0.01,
+                                        preprocess_plots = list(boxplot=FALSE, mds=FALSE, pca=FALSE),
+                                        analysis_plots = list(bcv=FALSE, ma=FALSE, volcano=FALSE, hm=FALSE),
+                                        plot_prefix="LUAD - Edge R")
+saveRDS(res_LUAD_edgeR,"data/res_LUAD_edgeR.rds")
+
+#Análisis voom LUAD:
+res_LUAD_voom<-analysis_voom(expr_LUAD_def,
+                             lfc_threshold = 1,
+                             fdr_threshold = 0.01,
+                             plots = list(volcano=FALSE, hm=FALSE),
+                             plot_prefix="LUAD - Voom")
 saveRDS(res_LUAD_voom,"data/res_LUAD_voom.rds")
 
 common_deg_LUAD <- intersect(
   res_LUAD_edgeR$significant$id_cruce,
   res_LUAD_voom$significant$id_cruce
 )
-saveRDS(common_deg_LUAD,"data/common_deg_LUADFDR001LFC2.rds")
+saveRDS(common_deg_LUAD,"data/common_deg_LUAD.rds")
 
-#Análisis EdgeR y voom para LUSC:
-res_LUSC_edgeR<-complete_edgeR_analysis(expr_LUSC_def, plot_prefix="LUSC - Edge R")
-res_LUSC_voom<-analysis_voom(expr_LUSC_def, plot_prefix="LUSC - Voom")
+#Análisis EdgeR LUSC:
+res_LUSC_edgeR<-complete_edgeR_analysis(expr_LUSC_def, 
+                                        lfc_threshold = 1,
+                                        fdr_threshold = 0.05,
+                                        preprocess_plots = list(boxplot=FALSE, mds=FALSE, pca=FALSE),
+                                        analysis_plots = list(bcv=FALSE, ma=FALSE, volcano=FALSE, hm=FALSE),
+                                        plot_prefix="LUSC - Edge R")
 saveRDS(res_LUSC_edgeR,"data/res_LUSC_edgeR.rds")
+
+#Análisis Voom LUSC:
+res_LUSC_voom<-analysis_voom(expr_LUSC_def, 
+                             lfc_threshold = 1,
+                             fdr_threshold = 0.05,
+                             plots = list(volcano=FALSE, hm=FALSE),
+                             plot_prefix="LUSC - Voom")
 saveRDS(res_LUSC_voom,"data/res_LUSC_voom.rds")
 
 common_deg_LUSC <- intersect(
   res_LUSC_edgeR$significant$id_cruce,
   res_LUSC_voom$significant$id_cruce
 )
-saveRDS(common_deg_LUSC,"data/common_deg_LUSCFDR001_LFC2.rds")
+saveRDS(common_deg_LUSC,"data/common_deg_LUSC.rds")
 
 common_lung_deg<-intersect(common_deg_LUAD, common_deg_LUSC)
-saveRDS(common_lung_deg,"data/common_lung_degFDR001_LFC2.rds")
+saveRDS(common_lung_deg,"data/common_lung_deg.rds")
 
 
 ###DIAGRAMAS DE Venn MUY FEOS
