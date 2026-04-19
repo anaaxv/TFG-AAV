@@ -707,37 +707,6 @@ analysis_voom<-function(expr_data,
               file=file.path(results_folder, paste0(plot_prefix, "_all_genes.txt")),
               quote=FALSE, sep="\t", row.names=FALSE) 
   
-<<<<<<< HEAD
-  
-=======
-  # --- INICIO CAMBIO 5: Exportación para reposicionamiento Voom ---
-  significant_pc <- subset(significant, gene_type == "protein_coding")
-  up_pc <- subset(significant_pc, logFC > 0)
-  down_pc <- subset(significant_pc, logFC < 0)
-  
-  drug_folder <- file.path(base_folder, "analysis", "drug_inputs")
-  if(!dir.exists(drug_folder)){
-    dir.create(drug_folder, recursive=TRUE)
-  }
-  
-  # CMap / CLUE
-  write.table(na.omit(up_pc$gene_name), 
-              file=file.path(drug_folder, paste0(plot_prefix, "_UP_symbols.txt")),
-              quote=FALSE, row.names=FALSE, col.names=FALSE)
-  
-  write.table(na.omit(down_pc$gene_name), 
-              file=file.path(drug_folder, paste0(plot_prefix, "_DOWN_symbols.txt")),
-              quote=FALSE, row.names=FALSE, col.names=FALSE)
-  
-  # PanDrugs / CDRPipe / shinyDeepDR
-  df_drugs <- significant_pc[!is.na(significant_pc$gene_name), c("gene_name", "logFC", "adj.P.Val")]
-  write.table(df_drugs, 
-              file=file.path(drug_folder, paste0(plot_prefix, "_Drug_Table.txt")),
-              quote=FALSE, sep="\t", row.names=FALSE)
-  # --- FIN CAMBIO 5 ---
-  
-  # --- RETORNO AMPLIADO ---
->>>>>>> 235da60eab801d8766b288266d8dbc57f29bed6b
   return(list(
     all_genes=results,
     significant=significant,
@@ -820,8 +789,9 @@ lista_lung <- list(
 )
 
 ggvenn(lista_lung, fill_color = c("#CD5C5C", "#4682B4")) +
-<<<<<<< HEAD
+
   labs(title = "Genes compartidos entre LUAD y LUSC")
+
 
 #Preparación de los Inputs para las herramientas de reposicionamiento de fármacos:
 #Función que genera los inputs para ShinyDeepDR:
@@ -939,6 +909,5 @@ inputs_cdrpipe(
   df_degs = degs_voom_lusc, 
   file_name = "CDRpipe_LUSC_Voom.csv"
 )
-=======
-  labs(title = "Genes compartidos entre LUAD y LUSC")
->>>>>>> 235da60eab801d8766b288266d8dbc57f29bed6b
+
+
