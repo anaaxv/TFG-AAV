@@ -674,7 +674,7 @@ analysis_voom<-function(expr_data,
               file=file.path(results_folder, paste0(plot_prefix, "_all_genes.txt")),
               quote=FALSE, sep="\t", row.names=FALSE) 
   
-  # --- RETORNO AMPLIADO ---
+  
   return(list(
     all_genes=results,
     significant=significant,
@@ -685,8 +685,8 @@ analysis_voom<-function(expr_data,
 
 #Análisis EdgeR LUAD:
 res_LUAD_edgeR<-complete_edgeR_analysis(expr_LUAD_def,
-                                        lfc_threshold = 1,
-                                        fdr_threshold = 0.01,
+                                        lfc_threshold = 2,
+                                        fdr_threshold = 0.05,
                                         preprocess_plots = list(boxplot=FALSE, mds=FALSE, pca=FALSE),
                                         analysis_plots = list(bcv=FALSE, ma=FALSE, volcano=FALSE, hm=FALSE),
                                         plot_prefix="LUAD - Edge R")
@@ -694,8 +694,8 @@ saveRDS(res_LUAD_edgeR,"data/res_LUAD_edgeR.rds")
 
 #Análisis voom LUAD:
 res_LUAD_voom<-analysis_voom(expr_LUAD_def,
-                             lfc_threshold = 1,
-                             fdr_threshold = 0.01,
+                             lfc_threshold = 2,
+                             fdr_threshold = 0.05,
                              plots = list(volcano=FALSE, hm=FALSE),
                              plot_prefix="LUAD - Voom")
 saveRDS(res_LUAD_voom,"data/res_LUAD_voom.rds")
@@ -708,7 +708,7 @@ saveRDS(common_deg_LUAD,"data/common_deg_LUAD.rds")
 
 #Análisis EdgeR LUSC:
 res_LUSC_edgeR<-complete_edgeR_analysis(expr_LUSC_def, 
-                                        lfc_threshold = 1,
+                                        lfc_threshold = 2,
                                         fdr_threshold = 0.05,
                                         preprocess_plots = list(boxplot=FALSE, mds=FALSE, pca=FALSE),
                                         analysis_plots = list(bcv=FALSE, ma=FALSE, volcano=FALSE, hm=FALSE),
@@ -717,7 +717,7 @@ saveRDS(res_LUSC_edgeR,"data/res_LUSC_edgeR.rds")
 
 #Análisis Voom LUSC:
 res_LUSC_voom<-analysis_voom(expr_LUSC_def, 
-                             lfc_threshold = 1,
+                             lfc_threshold = 2,
                              fdr_threshold = 0.05,
                              plots = list(volcano=FALSE, hm=FALSE),
                              plot_prefix="LUSC - Voom")
@@ -758,3 +758,120 @@ lista_lung <- list(
 
 ggvenn(lista_lung, fill_color = c("#CD5C5C", "#4682B4")) +
   labs(title = "Genes compartidos entre LUAD y LUSC")
+
+#Preparación de los Inputs para las herramientas de reposicionamiento de fármacos:
+#Función que genera los inputs para ShinyDeepDR:
+#Extrae la mediana de los TPMs de las muestras tumorales:
+
+inputs_shinyDeepDR<-function(expr_data, file_name, folder="data/analysis/results") {
+  if(!dir.exists(folder)){
+    dir.create(folder, recursive=TRUE)
+  }  
+  es_tumor <- colData(expr_data)$sample_type == "Tumor"
+  expr_tumor <- expr_data[, es_tumor]
+  
+  #extraer la matriz de TPM:
+  if("tpm_unstrand" %in% assayNames(expr_tumor)) {
+    tpm_matrix <- assay(expr_tumor, "tpm_unstrand")
+  } else {
+    stop("No se ha encontrado el ensayo 'tpm_unstrand'.")
+  }
+  
+  #calculamos la mediana por gen:
+  mediana_tpm <- apply(tpm_matrix, 1, median)
+  
+  #nombres de los genes:
+  info_genes <- as.data.frame(rowData(expr_tumor))
+  
+  df_shiny <- data.frame(
+    Gene = info_genes$gene_name,
+    Promedio_Tumoral = mediana_tpm
+  )
+  
+  #quitar NAs:
+  df_shiny <- df_shiny[!is.na(df_shiny$Gene), ]
+  
+  # Quietar duplicados:
+  #Agrupamos por símbolo genético y sumamos los TPMs de las variantes/isoformas (en el caso de que varios ensembl id apunten a un mismo genesymbol)
+  df_shiny <- df_shiny %>%
+    group_by(Gene) %>%
+    summarise(Promedio_Tumoral = sum(Promedio_Tumoral)) %>%
+    ungroup() %>%
+    as.data.frame()
+  
+  #guardamos:
+  ruta_salida <- file.path(folder, file_name)
+  write.table(df_shiny, file = ruta_salida, sep = "\t", quote = FALSE, row.names = FALSE)
+  
+  cat("Archivo shinyDeepDR guardado en:", ruta_salida, "\n")
+  cat("Tumores promediados:", sum(es_tumor), "\n")
+  
+}
+
+inputs_shinyDeepDR(
+  expr_data = expr_LUAD_def,
+  file_name="shinyDeepDR_LUAD.txt"
+)
+
+inputs_shinyDeepDR(
+  expr_data = expr_LUSC_def,
+  file_name="shinyDeepDR_LUSC.txt"
+)
+
+#Preparamos los inputs para CDRPipe:
+inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
+  
+  #creamos directorio si no existe:
+  if(!dir.exists(folder)){
+    dir.create(folder, recursive=TRUE)
+  }
+  
+  #detectar si es Voom o edgeR para elegir la columna del p-valor:
+  if ("adj.P.Val" %in% colnames(df_degs)) {
+    col_pval <- "adj.P.Val"   # Es Voom
+  } else if ("FDR" %in% colnames(df_degs)) {
+    col_pval <- "FDR"         # Es edgeR
+  } else {
+    stop("No se encuentra adj.P.Val ni FDR en los datos.")
+  }
+  
+  #seleccionamos y renombramos las columnas según lo que pide CDRpipe:
+  df_cdr <- df_degs %>%
+    dplyr::select(
+      SYMBOL = gene_name,
+      log2FC_1 = logFC,
+      p_val_adj = all_of(col_pval)
+    )
+  
+  #limpieza de NAs
+  df_cdr <- df_cdr %>% filter(!is.na(SYMBOL) & SYMBOL != "")
+  
+  #Manejo de duplicados(Nos quedamos con la variante que tenga el p-valor más significativo (el menor)):  
+  df_cdr <- df_cdr %>%
+    group_by(SYMBOL) %>%
+    slice_min(order_by = p_val_adj, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    as.data.frame()
+  
+  #Guardamos en formato CSV (comma-separated):
+  ruta_salida <- file.path(folder, file_name)
+  write.csv(df_cdr, file = ruta_salida, row.names = FALSE, quote = FALSE)
+  
+  cat("Archivo para CDRpipe guardado en:", ruta_salida, "\n")
+  cat("Total de genes exportados:", nrow(df_cdr), "\n")
+}
+
+#CAMBIARR:
+degs_voom_luad <- read.delim("C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/FDR0.01LFC2/LUAD - Voom_DEGs_FDR_0.01_LFC_2.txt", sep = "\t", header = TRUE)
+
+inputs_cdrpipe(
+  df_degs = degs_voom_luad, 
+  file_name = "CDRpipe_LUAD_Voom.csv"
+)
+
+degs_voom_lusc <- read.delim("C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/FDR0.01LFC2/LUSC - Voom_DEGs_FDR_0.01_LFC_2.txt", sep = "\t", header = TRUE)
+
+inputs_cdrpipe(
+  df_degs = degs_voom_lusc, 
+  file_name = "CDRpipe_LUSC_Voom.csv"
+)
