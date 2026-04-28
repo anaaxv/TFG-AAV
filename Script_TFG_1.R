@@ -268,9 +268,9 @@ preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Expe
   info_genes<-as.data.frame(rowData(expr_data))
   info_genes$id_cruce<-sub("\\..*", "", rownames(info_genes)) #el id_cruce es el ensembl id sin el nº de versión
   
-  # --- INICIO CAMBIO 1: Añadir gene_type ---
+  #Añadir gene_type:
   dgl$genes<-info_genes[, c("id_cruce", "gene_name", "gene_type")]
-  # --- FIN CAMBIO 1 ---
+
   
   #Filtrado de genes poco expresados:
   keep<-filterByExpr(dgl, group=group)  #elimina genes con muy baja expresión, reduce ruido, mejora potencia estadística etc
@@ -358,13 +358,11 @@ analysis_edgeR<-function(dgl,
   
   all_results$id_cruce<-sub("\\..*","", rownames(all_results))
   
-  # --- INICIO CAMBIO 2: Descomentado el left_join para rescatar nombres y tipos de gen ---
   if (!is.null(dgl$genes)){
     all_results<-dplyr::left_join(all_results, 
                                   dgl$genes,
                                   by="id_cruce")
   }
-  # --- FIN CAMBIO 2 ---
   
   
   #Resultados significativos:
@@ -486,46 +484,28 @@ analysis_edgeR<-function(dgl,
               sep="\t",
               row.names=FALSE)
   
-  # --- INICIO CAMBIO 3: Exportación para reposicionamiento EdgeR ---
+  # GUARDAR GENES SIGNIFICATIVOS protein-coding
   significant_pc <- subset(significant, gene_type == "protein_coding")
   up_pc <- subset(significant_pc, logFC > 0)
   down_pc <- subset(significant_pc, logFC < 0)
-  
-  drug_folder <- file.path(base_folder, "analysis", "drug_inputs")
-  if(!dir.exists(drug_folder)){
-    dir.create(drug_folder, recursive=TRUE)
-  }
-  
-  # CMap / CLUE
-  write.table(na.omit(up_pc$gene_name), 
-              file=file.path(drug_folder, paste0(plot_prefix, "_UP_symbols.txt")),
-              quote=FALSE, row.names=FALSE, col.names=FALSE)
-  
-  write.table(na.omit(down_pc$gene_name), 
-              file=file.path(drug_folder, paste0(plot_prefix, "_DOWN_symbols.txt")),
-              quote=FALSE, row.names=FALSE, col.names=FALSE)
-  
-  # PanDrugs / CDRPipe / shinyDeepDR
-  df_drugs <- significant_pc[!is.na(significant_pc$gene_name), c("gene_name", "logFC", "FDR")]
-  write.table(df_drugs, 
-              file=file.path(drug_folder, paste0(plot_prefix, "_Drug_Table.txt")),
-              quote=FALSE, sep="\t", row.names=FALSE)
-  # --- FIN CAMBIO 3 ---
   
   return(list(
     all_genes=all_results,
     significant=significant,
     up_genes=up,
-    down_genes=down
+    down_genes=down,
+    significant_pc=significant_pc,
+    up_genes_pc=up_pc,
+    down_genes_pc=down_pc
   ))
 }
 
 complete_edgeR_analysis<-function(expr_data,
                                   group_variable="sample_type",
                                   reference_level="Normal",
-                                  lfc_threshold=2, #añadir tb para el bvolcano otra que sea para logfc 2
-                                  fdr_threshold=0.01, #mejor 5%??
-                                  preprocess_plots=list(boxplot=TRUE, mds=TRUE, pca=TRUE), #CAMBIARR
+                                  lfc_threshold=2, 
+                                  fdr_threshold=0.01, 
+                                  preprocess_plots=list(boxplot=TRUE, mds=TRUE, pca=TRUE), 
                                   analysis_plots=list(bcv=TRUE, ma=TRUE, volcano=TRUE, hm=TRUE),
                                   plot_prefix="Edge R"){
   #Preprocesamiento:
@@ -560,10 +540,10 @@ analysis_voom<-function(expr_data,
   
   info_genes <- as.data.frame(rowData(expr_data))
   info_genes$id_cruce <- sub("\\..*","", rownames(info_genes))
-  # --- INICIO CAMBIO 4: Rescatar gene_type en Voom ---
-  info_genes <- info_genes[, c("id_cruce", "gene_name", "gene_type")]
-  # --- FIN CAMBIO 4 ---
   
+  #GENE_TYPE:
+  info_genes <- info_genes[, c("id_cruce", "gene_name", "gene_type")]
+
   counts<-assay(expr_data)
   counts<-as.matrix(counts) #aseguramos que sea matriz
   mode(counts)<-"numeric" #forzamos a numerico
@@ -668,7 +648,7 @@ analysis_voom<-function(expr_data,
     rownames(heatmap_data) <- sub("\\..*", "", rownames(heatmap_data))
     heatmap_data <- heatmap_data[rownames(heatmap_data) %in% top_genes_hm, ]
     
-    # --- NUEVO: ORDENAR LAS MUESTRAS POR GRUPO ---
+    #ORDENAR LAS MUESTRAS POR GRUPO.
     # Creamos un índice para ordenar: primero Normal, luego Tumor (según tus niveles)
     orden_muestras <- order(group)
     heatmap_data <- heatmap_data[, orden_muestras] 
@@ -684,7 +664,7 @@ analysis_voom<-function(expr_data,
       annotation_col = annotation_col,
       show_rownames = FALSE, 
       show_colnames = FALSE,
-      cluster_cols = FALSE,           # <<-- CAMBIO: Crucial para que respete el orden manual
+      cluster_cols = FALSE,          
       cluster_rows = TRUE,            # Los genes sí los dejamos agrupados por parecido
       clustering_distance_rows = "correlation", 
       main = paste(plot_prefix, "- Heatmap")
@@ -705,13 +685,21 @@ analysis_voom<-function(expr_data,
   # Guardar tabla completa
   write.table(results, 
               file=file.path(results_folder, paste0(plot_prefix, "_all_genes.txt")),
-              quote=FALSE, sep="\t", row.names=FALSE) 
+              quote=FALSE, sep="\t", row.names=FALSE)
+  
+  #Guardamos los significativos que codifiquen para prote:
+  significant_pc <- subset(significant, gene_type == "protein_coding")
+  up_pc <- subset(significant_pc, DEG == "Up")
+  down_pc <- subset(significant_pc, DEG == "Down")
   
   return(list(
     all_genes=results,
     significant=significant,
     up_genes=up_genes,     
-    down_genes=down_genes 
+    down_genes=down_genes,
+    significant_pc = significant_pc,
+    up_genes_pc = up_pc,
+    down_genes_pc = down_pc
   ))
 }
 
@@ -896,6 +884,11 @@ inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
 }
 
 #CAMBIARR:
+#inputs_cdrpipe(
+#df_degs = res_LUAD_voom$significant, # Usas directamente el resultado de la función
+#file_name = "CDRpipe_LUAD_Voom.csv"
+#)
+
 degs_voom_luad <- read.delim("C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/FDR0.01LFC2/LUAD - Voom_DEGs_FDR_0.01_LFC_2.txt", sep = "\t", header = TRUE)
 
 inputs_cdrpipe(
