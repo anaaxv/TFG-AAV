@@ -351,7 +351,7 @@ analysis_edgeR<-function(dgl,
   fit<-glmQLFit(dgl,design) #se ajusta al modelo QL Quasi-likelihood
   
   #Test de umbral de fold change:  Incluir también glmQLFTest??? para ver cualquier cambio, es decir, logFC distinto de 0
-  treat<-glmTreat(fit,coef=2,lfc=lfc_threshold) #pregunta si logFC>1, o sea foldchange>2, mas exigente que si buscasemos si logFc distinto de 0
+  treat<-glmTreat(fit,coef=2,lfc=lfc_threshold) 
   
   #Resultados completos:
   all_results<-topTags(treat, n=nrow(dgl), sort.by="none")$table #devuelve table con logFC, logCPM, F, PValue, FDR. n=nrow(gdl) significa que se hace para todos los genes
