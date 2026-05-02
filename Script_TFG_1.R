@@ -200,11 +200,11 @@ procesar_expr<-function(expr,
     filter(n()>1) %>%
     pull(patient_id) %>%
     unique()
- 
+  
   #se queda con todo menos con las muestras tumorales de pacientes pareados: 
   expr_def<-expr_def[,!(
     colData(expr_def)$patient_id %in% pareados & 
-    colData(expr_def)$sample_type=="Tumor"  
+      colData(expr_def)$sample_type=="Tumor"  
   )]
   
   list(
@@ -218,7 +218,7 @@ procesar_expr<-function(expr,
 res_LUAD<-procesar_expr(
   expr=expr_LUAD_raw,
   clinical_patients=clinical_LUAD_BCRtab$clinical_patient_luad$bcr_patient_barcode
-  )
+)
 
 expr_LUAD_def<-res_LUAD$expr_def
 common_patients_LUAD<-res_LUAD$common_patients
@@ -256,7 +256,7 @@ preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Expe
   counts[is.na(counts)]<-0  #busca los NA y los convierte en 0
   
   #counts[]<-lapply(as.data.frame(counts), function(x) as.numeric(as.character(x))) #convierte a data frame, recorre columna por columna, fuerza que sea numerico, y lo vuelve a meter en la matriz
-
+  
   
   #Definir grupo:
   group<-factor(colData(expr_data)[[group_variable]]) #la variable "tumor" o "normal" se convierte en variable categórica al usar factor. Con el doble corchete se extrae de verdad lo que hay en esa columna
@@ -267,7 +267,10 @@ preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Expe
   
   info_genes<-as.data.frame(rowData(expr_data))
   info_genes$id_cruce<-sub("\\..*", "", rownames(info_genes)) #el id_cruce es el ensembl id sin el nº de versión
-  dgl$genes<-info_genes[, c("id_cruce", "gene_name")]
+  
+  #Añadir gene_type:
+  #dgl$genes<-info_genes[, c("id_cruce", "gene_name", "gene_type")]
+  dgl$genes <- info_genes[rownames(dgl), c("id_cruce", "gene_name", "gene_type")]
   
   #Filtrado de genes poco expresados:
   keep<-filterByExpr(dgl, group=group)  #elimina genes con muy baja expresión, reduce ruido, mejora potencia estadística etc
@@ -284,7 +287,7 @@ preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Expe
   
   #Normlización TMM:
   dgl<-calcNormFactors(dgl, method="TMM") #Normalización Trimmed Mean of M-Values, corrige diferencias de composición, de profundidas de secuenciación...
- 
+  
   if (plots$boxplot){   #el boxplot muestra que el rango de counts y las posiciones centrales son similares en muestras diferentes después de la normalizacion
     logCPM<-cpm(dgl, log=TRUE) #log-transformed counts per million
     boxplot(logCPM, 
@@ -324,7 +327,7 @@ preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Expe
       theme_minimal()
     print(p)
   }
-   
+  
   return(list(
     dgl=dgl,
     group=group
@@ -332,12 +335,12 @@ preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Expe
 }
 
 analysis_edgeR<-function(dgl,
-                   group,
-                   lfc_threshold=1, #cambiar a 1.5???
-                   fdr_threshold=0.05, #cambiar a 0.05???
-                   plots=list(bcv=TRUE, ma=TRUE, volcano=TRUE, hm=TRUE),
-                   base_folder="data",
-                   plot_prefix="Edge R"){ 
+                         group,
+                         lfc_threshold=1, #cambiar a 1.5???
+                         fdr_threshold=0.05, #cambiar a 0.05???
+                         plots=list(bcv=TRUE, ma=TRUE, volcano=TRUE, hm=TRUE),
+                         base_folder="data",
+                         plot_prefix="Edge R"){ 
   #Diseño:
   design<-model.matrix(~group) #convierte el modelo en matriz de diseño
   
@@ -348,19 +351,15 @@ analysis_edgeR<-function(dgl,
   fit<-glmQLFit(dgl,design) #se ajusta al modelo QL Quasi-likelihood
   
   #Test de umbral de fold change:  Incluir también glmQLFTest??? para ver cualquier cambio, es decir, logFC distinto de 0
-  treat<-glmTreat(fit,coef=2,lfc=lfc_threshold) #pregunta si logFC>1, o sea foldchange>2, mas exigente que si buscasemos si logFc distinto de 0
+  treat<-glmTreat(fit,coef=2,lfc=lfc_threshold) 
   
   #Resultados completos:
   all_results<-topTags(treat, n=nrow(dgl), sort.by="none")$table #devuelve table con logFC, logCPM, F, PValue, FDR. n=nrow(gdl) significa que se hace para todos los genes
   
-  all_results$id_cruce<-sub("\\..*","", rownames(all_results))
+  if(!"id_cruce" %in% colnames(all_results)){
+    all_results$id_cruce <- sub("\\..*","", rownames(all_results))
+  } 
   
-  #if (!is.null(dgl$genes)){
-  #  all_results<-dplyr::left_join(all_results, 
-   #                               dgl$genes,
-  #                                by="id_cruce")
-  #}
-
   
   #Resultados significativos:
   significant<-subset(all_results, FDR<fdr_threshold)
@@ -421,10 +420,10 @@ analysis_edgeR<-function(dgl,
            x="Log2 Fold Change",
            y="-Log10 FDR")+
       theme_minimal()
-  
-  print(p) #pq en ggplot no salen los graficos automaticamente
-        
-  volcano_deg<-subset(volcano_df, DEG!="Not significant")                         
+    
+    print(p) #pq en ggplot no salen los graficos automaticamente
+    
+    volcano_deg<-subset(volcano_df, DEG!="Not significant")                         
   }
   
   if (plots$hm && nrow(significant) > 0) {
@@ -461,40 +460,48 @@ analysis_edgeR<-function(dgl,
     )
   }
   
-
   
-    results_folder <- file.path(base_folder, "analysis", "results")
-    if(!dir.exists(results_folder)){
-      dir.create(results_folder, recursive=TRUE)
-    }
-    
-    write.table(significant,
-                file=file.path(results_folder,
-                               paste0(plot_prefix,"_DEGs_FDR_",fdr_threshold,".txt")),
-                quote=FALSE,
-                sep="\t",
-                row.names=FALSE)
-    
-    write.table(all_results,
-                file=file.path(results_folder,
-                               paste0(plot_prefix,"_all_genes.txt")),
-                quote=FALSE,
-                sep="\t",
-                row.names=FALSE)
-return(list(
-  all_genes=all_results,
-  significant=significant,
-  up_genes=up,
-  down_genes=down
-))
+  results_folder <- file.path(base_folder, "analysis", "results")
+  if(!dir.exists(results_folder)){
+    dir.create(results_folder, recursive=TRUE)
+  }
+  
+  write.table(significant,
+              file=file.path(results_folder,
+                             paste0(plot_prefix,"_DEGs_FDR_",fdr_threshold,".txt")),
+              quote=FALSE,
+              sep="\t",
+              row.names=FALSE)
+  
+  write.table(all_results,
+              file=file.path(results_folder,
+                             paste0(plot_prefix,"_all_genes.txt")),
+              quote=FALSE,
+              sep="\t",
+              row.names=FALSE)
+  
+  # GUARDAR GENES SIGNIFICATIVOS protein-coding
+  significant_pc <- significant[significant$gene_type == "protein_coding" & !is.na(significant$gene_type), ]
+  up_pc <- significant_pc[significant_pc$logFC > 0, ]
+  down_pc <- significant_pc[significant_pc$logFC < 0, ]
+  
+  return(list(
+    all_genes=all_results,
+    significant=significant,
+    up_genes=up,
+    down_genes=down,
+    significant_pc=significant_pc,
+    up_genes_pc=up_pc,
+    down_genes_pc=down_pc
+  ))
 }
 
 complete_edgeR_analysis<-function(expr_data,
                                   group_variable="sample_type",
                                   reference_level="Normal",
-                                  lfc_threshold=2, #añadir tb para el bvolcano otra que sea para logfc 2
-                                  fdr_threshold=0.01, #mejor 5%??
-                                  preprocess_plots=list(boxplot=TRUE, mds=TRUE, pca=TRUE), #CAMBIARR
+                                  lfc_threshold=2, 
+                                  fdr_threshold=0.01, 
+                                  preprocess_plots=list(boxplot=TRUE, mds=TRUE, pca=TRUE), 
                                   analysis_plots=list(bcv=TRUE, ma=TRUE, volcano=TRUE, hm=TRUE),
                                   plot_prefix="Edge R"){
   #Preprocesamiento:
@@ -527,10 +534,12 @@ analysis_voom<-function(expr_data,
                         base_folder="data",
                         plot_prefix="Voom"){
   
-  info_genes <- as.data.frame(rowData(expr_data))
-  info_genes$id_cruce <- sub("\\..*","", rownames(info_genes))
-  info_genes <- info_genes[, c("id_cruce", "gene_name")]
+  info_genes_raw <- as.data.frame(rowData(expr_data))
+  info_genes_raw$id_cruce <- sub("\\..*","", rownames(info_genes_raw))
   
+  #GENE_TYPE:
+  info_genes <- info_genes_raw[, c("id_cruce", "gene_name", "gene_type")]
+
   counts<-assay(expr_data)
   counts<-as.matrix(counts) #aseguramos que sea matriz
   mode(counts)<-"numeric" #forzamos a numerico
@@ -551,7 +560,9 @@ analysis_voom<-function(expr_data,
   
   counts<-counts[keep,]
   
-  dge<-DGEList(counts=counts, group=group)
+  info_genes_filtered <- info_genes[rownames(counts), ]
+  
+  dge <- DGEList(counts=counts, group=group, genes=info_genes_filtered)
   dge<-calcNormFactors(dge, method="TMM")
   
   design<-model.matrix(~group)
@@ -562,16 +573,7 @@ analysis_voom<-function(expr_data,
   fit<-lmFit(v, design)
   fit<-eBayes(fit)
   
-  results<-topTable(fit,
-                    coef=coef_name,
-                    number=Inf,
-                    adjust.method="fdr")
-  
-  results$id_cruce<-sub("\\..*","", rownames(results))
-  
-  results<-dplyr::left_join(results, 
-                 info_genes,
-                 by="id_cruce")
+  results <- topTable(fit, coef=2, number=Inf, adjust.method="fdr")
   
   results$DEG <- "Not significant"
   results$DEG[results$logFC > lfc_threshold & results$adj.P.Val < fdr_threshold] <- "Up"
@@ -635,7 +637,7 @@ analysis_voom<-function(expr_data,
     rownames(heatmap_data) <- sub("\\..*", "", rownames(heatmap_data))
     heatmap_data <- heatmap_data[rownames(heatmap_data) %in% top_genes_hm, ]
     
-    # --- NUEVO: ORDENAR LAS MUESTRAS POR GRUPO ---
+    #ORDENAR LAS MUESTRAS POR GRUPO.
     # Creamos un índice para ordenar: primero Normal, luego Tumor (según tus niveles)
     orden_muestras <- order(group)
     heatmap_data <- heatmap_data[, orden_muestras] 
@@ -651,7 +653,7 @@ analysis_voom<-function(expr_data,
       annotation_col = annotation_col,
       show_rownames = FALSE, 
       show_colnames = FALSE,
-      cluster_cols = FALSE,           # <<-- CAMBIO: Crucial para que respete el orden manual
+      cluster_cols = FALSE,          
       cluster_rows = TRUE,            # Los genes sí los dejamos agrupados por parecido
       clustering_distance_rows = "correlation", 
       main = paste(plot_prefix, "- Heatmap")
@@ -672,33 +674,40 @@ analysis_voom<-function(expr_data,
   # Guardar tabla completa
   write.table(results, 
               file=file.path(results_folder, paste0(plot_prefix, "_all_genes.txt")),
-              quote=FALSE, sep="\t", row.names=FALSE) 
+              quote=FALSE, sep="\t", row.names=FALSE)
   
-  # --- RETORNO AMPLIADO ---
+  #Guardamos los significativos que codifiquen para prote:
+  significant_pc <- significant[significant$gene_type == "protein_coding" & !is.na(significant$gene_type), ]
+  up_pc <- significant_pc[significant_pc$DEG == "Up", ]
+  down_pc <- significant_pc[significant_pc$DEG == "Down", ]
+  
   return(list(
     all_genes=results,
     significant=significant,
     up_genes=up_genes,     
-    down_genes=down_genes 
+    down_genes=down_genes,
+    significant_pc = significant_pc,
+    up_genes_pc = up_pc,
+    down_genes_pc = down_pc
   ))
 }
 
 #Análisis EdgeR LUAD:
 res_LUAD_edgeR<-complete_edgeR_analysis(expr_LUAD_def,
-                                        lfc_threshold = 1,
+                                        lfc_threshold = 2,
                                         fdr_threshold = 0.01,
                                         preprocess_plots = list(boxplot=FALSE, mds=FALSE, pca=FALSE),
                                         analysis_plots = list(bcv=FALSE, ma=FALSE, volcano=FALSE, hm=FALSE),
                                         plot_prefix="LUAD - Edge R")
-saveRDS(res_LUAD_edgeR,"data/res_LUAD_edgeR.rds")
+saveRDS(res_LUAD_edgeR,"data/res_LUAD_edgeR_pcg.rds")
 
 #Análisis voom LUAD:
 res_LUAD_voom<-analysis_voom(expr_LUAD_def,
-                             lfc_threshold = 1,
+                             lfc_threshold = 2,
                              fdr_threshold = 0.01,
                              plots = list(volcano=FALSE, hm=FALSE),
                              plot_prefix="LUAD - Voom")
-saveRDS(res_LUAD_voom,"data/res_LUAD_voom.rds")
+saveRDS(res_LUAD_voom,"data/res_LUAD_voom_pcg.rds")
 
 common_deg_LUAD <- intersect(
   res_LUAD_edgeR$significant$id_cruce,
@@ -708,20 +717,20 @@ saveRDS(common_deg_LUAD,"data/common_deg_LUAD.rds")
 
 #Análisis EdgeR LUSC:
 res_LUSC_edgeR<-complete_edgeR_analysis(expr_LUSC_def, 
-                                        lfc_threshold = 1,
-                                        fdr_threshold = 0.05,
+                                        lfc_threshold = 2,
+                                        fdr_threshold = 0.01,
                                         preprocess_plots = list(boxplot=FALSE, mds=FALSE, pca=FALSE),
                                         analysis_plots = list(bcv=FALSE, ma=FALSE, volcano=FALSE, hm=FALSE),
                                         plot_prefix="LUSC - Edge R")
-saveRDS(res_LUSC_edgeR,"data/res_LUSC_edgeR.rds")
+saveRDS(res_LUSC_edgeR,"data/res_LUSC_edgeR_pcg.rds")
 
 #Análisis Voom LUSC:
 res_LUSC_voom<-analysis_voom(expr_LUSC_def, 
-                             lfc_threshold = 1,
-                             fdr_threshold = 0.05,
+                             lfc_threshold = 2,
+                             fdr_threshold = 0.01,
                              plots = list(volcano=FALSE, hm=FALSE),
                              plot_prefix="LUSC - Voom")
-saveRDS(res_LUSC_voom,"data/res_LUSC_voom.rds")
+saveRDS(res_LUSC_voom,"data/res_LUSC_voom_pcg.rds")
 
 common_deg_LUSC <- intersect(
   res_LUSC_edgeR$significant$id_cruce,
@@ -757,4 +766,130 @@ lista_lung <- list(
 )
 
 ggvenn(lista_lung, fill_color = c("#CD5C5C", "#4682B4")) +
+
   labs(title = "Genes compartidos entre LUAD y LUSC")
+
+
+#Preparación de los Inputs para las herramientas de reposicionamiento de fármacos:
+#Función que genera los inputs para ShinyDeepDR:
+#Extrae la mediana de los TPMs de las muestras tumorales:
+
+inputs_shinyDeepDR<-function(expr_data, file_name, folder="data/analysis/results") {
+  if(!dir.exists(folder)){
+    dir.create(folder, recursive=TRUE)
+  }  
+  es_tumor <- colData(expr_data)$sample_type == "Tumor"
+  expr_tumor <- expr_data[, es_tumor]
+  
+  #extraer la matriz de TPM:
+  if("tpm_unstrand" %in% assayNames(expr_tumor)) {
+    tpm_matrix <- assay(expr_tumor, "tpm_unstrand")
+  } else {
+    stop("No se ha encontrado el ensayo 'tpm_unstrand'.")
+  }
+  
+  #calculamos la mediana por gen:
+  mediana_tpm <- apply(tpm_matrix, 1, median)
+  
+  #nombres de los genes:
+  info_genes <- as.data.frame(rowData(expr_tumor))
+  
+  df_shiny <- data.frame(
+    Gene = info_genes$gene_name,
+    Promedio_Tumoral = mediana_tpm
+  )
+  
+  #quitar NAs:
+  df_shiny <- df_shiny[!is.na(df_shiny$Gene), ]
+  
+  # Quietar duplicados:
+  #Agrupamos por símbolo genético y sumamos los TPMs de las variantes/isoformas (en el caso de que varios ensembl id apunten a un mismo genesymbol)
+  df_shiny <- df_shiny %>%
+    group_by(Gene) %>%
+    summarise(Promedio_Tumoral = sum(Promedio_Tumoral)) %>%
+    ungroup() %>%
+    as.data.frame()
+  
+  #guardamos:
+  ruta_salida <- file.path(folder, file_name)
+  write.table(df_shiny, file = ruta_salida, sep = "\t", quote = FALSE, row.names = FALSE)
+  
+  cat("Archivo shinyDeepDR guardado en:", ruta_salida, "\n")
+  cat("Tumores promediados:", sum(es_tumor), "\n")
+  
+}
+
+inputs_shinyDeepDR(
+  expr_data = expr_LUAD_def,
+  file_name="shinyDeepDR_LUAD.txt"
+)
+
+inputs_shinyDeepDR(
+  expr_data = expr_LUSC_def,
+  file_name="shinyDeepDR_LUSC.txt"
+)
+
+#Preparamos los inputs para CDRPipe:
+inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
+  
+  #creamos directorio si no existe:
+  if(!dir.exists(folder)){
+    dir.create(folder, recursive=TRUE)
+  }
+  
+  #detectar si es Voom o edgeR para elegir la columna del p-valor:
+  if ("adj.P.Val" %in% colnames(df_degs)) {
+    col_pval <- "adj.P.Val"   # Es Voom
+  } else if ("FDR" %in% colnames(df_degs)) {
+    col_pval <- "FDR"         # Es edgeR
+  } else {
+    stop("No se encuentra adj.P.Val ni FDR en los datos.")
+  }
+  
+  #seleccionamos y renombramos las columnas según lo que pide CDRpipe:
+  df_cdr <- df_degs %>%
+    dplyr::select(
+      SYMBOL = gene_name,
+      log2FC_1 = logFC,
+      p_val_adj = all_of(col_pval)
+    )
+  
+  #limpieza de NAs
+  df_cdr <- df_cdr %>% filter(!is.na(SYMBOL) & SYMBOL != "")
+  
+  #Manejo de duplicados(Nos quedamos con la variante que tenga el p-valor más significativo (el menor)):  
+  df_cdr <- df_cdr %>%
+    group_by(SYMBOL) %>%
+    slice_min(order_by = p_val_adj, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    as.data.frame()
+  
+  #Guardamos en formato CSV (comma-separated):
+  ruta_salida <- file.path(folder, file_name)
+  write.csv(df_cdr, file = ruta_salida, row.names = FALSE, quote = FALSE)
+  
+  cat("Archivo para CDRpipe guardado en:", ruta_salida, "\n")
+  cat("Total de genes exportados:", nrow(df_cdr), "\n")
+}
+
+#CAMBIARR:
+#inputs_cdrpipe(
+#df_degs = res_LUAD_voom$significant, # Usas directamente el resultado de la función
+#file_name = "CDRpipe_LUAD_Voom.csv"
+#)
+
+degs_voom_luad <- read.delim("C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/FDR0.01LFC2/LUAD - Voom_DEGs_FDR_0.01_LFC_2.txt", sep = "\t", header = TRUE)
+
+inputs_cdrpipe(
+  df_degs = degs_voom_luad, 
+  file_name = "CDRpipe_LUAD_Voom.csv"
+)
+
+degs_voom_lusc <- read.delim("C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/FDR0.01LFC2/LUSC - Voom_DEGs_FDR_0.01_LFC_2.txt", sep = "\t", header = TRUE)
+
+inputs_cdrpipe(
+  df_degs = degs_voom_lusc, 
+  file_name = "CDRpipe_LUSC_Voom.csv"
+)
+
+
