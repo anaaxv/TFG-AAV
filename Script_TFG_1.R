@@ -14,6 +14,9 @@ if (!require("limma", quietly = TRUE))
 if (!require("biomaRt", quietly = TRUE))
   BiocManager::install("biomaRt")
 
+if (!require("cmapR", quietly = TRUE))
+  BiocManager::install("cmapR")
+
 if (!require("DT", quietly = TRUE))
   install.packages("DT")
 
@@ -41,7 +44,8 @@ library(ggplot2)
 library(biomaRt)
 library(pheatmap)
 library(ggrepel)
-library(ggvenn)
+library(ggvenn) #diagramas de Venn, quitar?
+library(cmapR)
 
 #Definimos la ruta al directorio en el que se descargarán los datos y lo creamos:
 dir_gdc <- "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TCGA/GDCdata" #CAMBIAR EN EL FUTURO
@@ -892,4 +896,46 @@ inputs_cdrpipe(
   file_name = "CDRpipe_LUSC_Voom.csv"
 )
 
+#Creamos los objetos GCT para CMap (para su herramienta de Query):
 
+#LUAD:
+# 1. Ordenamos UP por significancia (adj.P.Val de menor a mayor)
+# El p-valor más pequeño es el más significativo.
+voom_up_LUAD <- res_LUAD_voom$up_genes %>%
+  arrange(adj.P.Val) %>% 
+  head(150) %>%
+  pull(gene_name)
+
+# 2. Ordenamos DOWN por significancia (adj.P.Val de menor a mayor)
+voom_down_LUAD <- res_LUAD_voom$down_genes %>%
+  arrange(adj.P.Val) %>% 
+  head(150) %>%
+  pull(gene_name)
+
+# 3. Guardar los genes en archivos .txt para subir a CLUE.io
+# Usamos un nombre claro que indique que vienen de voom
+write.table(voom_up_LUAD, file = "data/CMap_LUAD_voom_up_top150.txt", 
+            quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+write.table(voom_down_LUAD, file = "data/CMap_LUAD_voom_down_top150.txt", 
+            quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+# 4. Mensaje de confirmación para que sepas que todo ha ido bien
+cat("Listas de inputs para CMap generadas")
+
+#LUSC:
+voom_up_LUSC <- res_LUSC_voom$up_genes %>%
+  arrange(adj.P.Val) %>% 
+  head(150) %>%
+  pull(gene_name)
+
+voom_down_LUSC <- res_LUSC_voom$down_genes %>%
+  arrange(adj.P.Val) %>% 
+  head(150) %>%
+  pull(gene_name)
+
+write.table(voom_up_LUSC, file = "data/CMap_LUSC_voom_up_top150.txt", 
+            quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+write.table(voom_down_LUSC, file = "data/CMap_LUSC_voom_down_top150.txt", 
+            quote = FALSE, row.names = FALSE, col.names = FALSE)
