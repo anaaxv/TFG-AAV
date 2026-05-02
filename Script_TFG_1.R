@@ -269,8 +269,8 @@ preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Expe
   info_genes$id_cruce<-sub("\\..*", "", rownames(info_genes)) #el id_cruce es el ensembl id sin el nº de versión
   
   #Añadir gene_type:
-  dgl$genes<-info_genes[, c("id_cruce", "gene_name", "gene_type")]
-
+  #dgl$genes<-info_genes[, c("id_cruce", "gene_name", "gene_type")]
+  dgl$genes <- info_genes[rownames(dgl), c("id_cruce", "gene_name", "gene_type")]
   
   #Filtrado de genes poco expresados:
   keep<-filterByExpr(dgl, group=group)  #elimina genes con muy baja expresión, reduce ruido, mejora potencia estadística etc
@@ -356,13 +356,9 @@ analysis_edgeR<-function(dgl,
   #Resultados completos:
   all_results<-topTags(treat, n=nrow(dgl), sort.by="none")$table #devuelve table con logFC, logCPM, F, PValue, FDR. n=nrow(gdl) significa que se hace para todos los genes
   
-  all_results$id_cruce<-sub("\\..*","", rownames(all_results))
-  
-  if (!is.null(dgl$genes)){
-    all_results<-dplyr::left_join(all_results, 
-                                  dgl$genes,
-                                  by="id_cruce")
-  }
+  if(!"id_cruce" %in% colnames(all_results)){
+    all_results$id_cruce <- sub("\\..*","", rownames(all_results))
+  } 
   
   
   #Resultados significativos:
@@ -485,9 +481,9 @@ analysis_edgeR<-function(dgl,
               row.names=FALSE)
   
   # GUARDAR GENES SIGNIFICATIVOS protein-coding
-  significant_pc <- subset(significant, gene_type == "protein_coding")
-  up_pc <- subset(significant_pc, logFC > 0)
-  down_pc <- subset(significant_pc, logFC < 0)
+  significant_pc <- significant[significant$gene_type == "protein_coding" & !is.na(significant$gene_type), ]
+  up_pc <- significant_pc[significant_pc$logFC > 0, ]
+  down_pc <- significant_pc[significant_pc$logFC < 0, ]
   
   return(list(
     all_genes=all_results,
@@ -538,11 +534,11 @@ analysis_voom<-function(expr_data,
                         base_folder="data",
                         plot_prefix="Voom"){
   
-  info_genes <- as.data.frame(rowData(expr_data))
-  info_genes$id_cruce <- sub("\\..*","", rownames(info_genes))
+  info_genes_raw <- as.data.frame(rowData(expr_data))
+  info_genes_raw$id_cruce <- sub("\\..*","", rownames(info_genes_raw))
   
   #GENE_TYPE:
-  info_genes <- info_genes[, c("id_cruce", "gene_name", "gene_type")]
+  info_genes <- info_genes_raw[, c("id_cruce", "gene_name", "gene_type")]
 
   counts<-assay(expr_data)
   counts<-as.matrix(counts) #aseguramos que sea matriz
@@ -564,7 +560,9 @@ analysis_voom<-function(expr_data,
   
   counts<-counts[keep,]
   
-  dge<-DGEList(counts=counts, group=group)
+  info_genes_filtered <- info_genes[rownames(counts), ]
+  
+  dge <- DGEList(counts=counts, group=group, genes=info_genes_filtered)
   dge<-calcNormFactors(dge, method="TMM")
   
   design<-model.matrix(~group)
@@ -575,16 +573,7 @@ analysis_voom<-function(expr_data,
   fit<-lmFit(v, design)
   fit<-eBayes(fit)
   
-  results<-topTable(fit,
-                    coef=coef_name,
-                    number=Inf,
-                    adjust.method="fdr")
-  
-  results$id_cruce<-sub("\\..*","", rownames(results))
-  
-  results<-dplyr::left_join(results, 
-                            info_genes,
-                            by="id_cruce")
+  results <- topTable(fit, coef=2, number=Inf, adjust.method="fdr")
   
   results$DEG <- "Not significant"
   results$DEG[results$logFC > lfc_threshold & results$adj.P.Val < fdr_threshold] <- "Up"
@@ -688,9 +677,9 @@ analysis_voom<-function(expr_data,
               quote=FALSE, sep="\t", row.names=FALSE)
   
   #Guardamos los significativos que codifiquen para prote:
-  significant_pc <- subset(significant, gene_type == "protein_coding")
-  up_pc <- subset(significant_pc, DEG == "Up")
-  down_pc <- subset(significant_pc, DEG == "Down")
+  significant_pc <- significant[significant$gene_type == "protein_coding" & !is.na(significant$gene_type), ]
+  up_pc <- significant_pc[significant_pc$DEG == "Up", ]
+  down_pc <- significant_pc[significant_pc$DEG == "Down", ]
   
   return(list(
     all_genes=results,
@@ -706,19 +695,19 @@ analysis_voom<-function(expr_data,
 #Análisis EdgeR LUAD:
 res_LUAD_edgeR<-complete_edgeR_analysis(expr_LUAD_def,
                                         lfc_threshold = 2,
-                                        fdr_threshold = 0.05,
+                                        fdr_threshold = 0.01,
                                         preprocess_plots = list(boxplot=FALSE, mds=FALSE, pca=FALSE),
                                         analysis_plots = list(bcv=FALSE, ma=FALSE, volcano=FALSE, hm=FALSE),
                                         plot_prefix="LUAD - Edge R")
-saveRDS(res_LUAD_edgeR,"data/res_LUAD_edgeR.rds")
+saveRDS(res_LUAD_edgeR,"data/res_LUAD_edgeR_pcg.rds")
 
 #Análisis voom LUAD:
 res_LUAD_voom<-analysis_voom(expr_LUAD_def,
                              lfc_threshold = 2,
-                             fdr_threshold = 0.05,
+                             fdr_threshold = 0.01,
                              plots = list(volcano=FALSE, hm=FALSE),
                              plot_prefix="LUAD - Voom")
-saveRDS(res_LUAD_voom,"data/res_LUAD_voom.rds")
+saveRDS(res_LUAD_voom,"data/res_LUAD_voom_pcg.rds")
 
 common_deg_LUAD <- intersect(
   res_LUAD_edgeR$significant$id_cruce,
@@ -729,19 +718,19 @@ saveRDS(common_deg_LUAD,"data/common_deg_LUAD.rds")
 #Análisis EdgeR LUSC:
 res_LUSC_edgeR<-complete_edgeR_analysis(expr_LUSC_def, 
                                         lfc_threshold = 2,
-                                        fdr_threshold = 0.05,
+                                        fdr_threshold = 0.01,
                                         preprocess_plots = list(boxplot=FALSE, mds=FALSE, pca=FALSE),
                                         analysis_plots = list(bcv=FALSE, ma=FALSE, volcano=FALSE, hm=FALSE),
                                         plot_prefix="LUSC - Edge R")
-saveRDS(res_LUSC_edgeR,"data/res_LUSC_edgeR.rds")
+saveRDS(res_LUSC_edgeR,"data/res_LUSC_edgeR_pcg.rds")
 
 #Análisis Voom LUSC:
 res_LUSC_voom<-analysis_voom(expr_LUSC_def, 
                              lfc_threshold = 2,
-                             fdr_threshold = 0.05,
+                             fdr_threshold = 0.01,
                              plots = list(volcano=FALSE, hm=FALSE),
                              plot_prefix="LUSC - Voom")
-saveRDS(res_LUSC_voom,"data/res_LUSC_voom.rds")
+saveRDS(res_LUSC_voom,"data/res_LUSC_voom_pcg.rds")
 
 common_deg_LUSC <- intersect(
   res_LUSC_edgeR$significant$id_cruce,
