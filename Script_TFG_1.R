@@ -664,7 +664,6 @@ analysis_voom<-function(expr_data,
     )
   }
   
-  # --- EXPORTACIÓN DE FICHEROS (Como en edgeR) ---
   results_folder <- file.path(base_folder, "analysis", "results") 
   if(!dir.exists(results_folder)){
     dir.create(results_folder, recursive=TRUE)
@@ -973,30 +972,38 @@ write.table(voom_down_LUSC, file = "data/CMap_LUSC_voom_down_top150.txt",
             quote = FALSE, row.names = FALSE, col.names = FALSE)
 
 #TRATAMIENTO DE LOS RESULTADOS DE CLUE:
+analizar_resultados_clue <- function(ruta_gct, nombre_archivo_csv) {
+  
+  gct_data <- cmapR::parse.gctx(ruta_gct)
+  
+  #Extraer metadatos y matriz (manteniendo tu lógica)
+  metadatos_farmacos <- as.data.frame(gct_data@rdesc)
+  scores_ncs <- as.data.frame(gct_data@mat)
+  
+  #Crear la tabla final combinada
+  tabla_resultados <- data.frame(
+    Nombre_Farmaco = metadatos_farmacos$pert_iname,
+    Mecanismo_Accion = metadatos_farmacos$moa,
+    Target = metadatos_farmacos$target_name,
+    NCS = scores_ncs[,1] # Tomamos la primera columna de resultados
+  )
+  
+  #Filtrar los TOP HITS (Los más negativos son los mejores)
+  mis_candidatos <- tabla_resultados %>%
+    filter(NCS < 0) %>% 
+    arrange(NCS)
+  
+  # 5. Guardar los resultados en la carpeta de trabajo
+  write.csv(mis_candidatos, nombre_archivo_csv, row.names = FALSE)
+  
+  # 6. Devolver el objeto para poder verlo en R
+  return(mis_candidatos)
+}
 
-gct_data_LUSC <- parse.gctx("C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Clue Query (CMap)/LUSC/my_analysis.sig_queryl1k_tool.69f7596e8ed24f0014280d7f/ncs.gct")
-metadatos_farmacos <- as.data.frame(gct_data_LUSC@rdesc)
 
-# 3. Extraer la matriz de scores (el NCS está en la matriz @mat)
-scores_ncs <- as.data.frame(gct_data_LUSC@mat)
-
-# 4. Crear la tabla final combinada
-tabla_resultados_LUSC <- data.frame(
-  Nombre_Farmaco = metadatos_farmacos$pert_iname,
-  Mecanismo_Accion = metadatos_farmacos$moa,
-  Target = metadatos_farmacos$target_name,
-  NCS = scores_ncs[,1] # Tomamos la primera columna de resultados
+#para LUAD:
+res_LUAD <- analizar_clue_resultados(
+  ruta_gct = "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Clue Query (CMap)/LUAD/my_analysis.sig_queryl1k_tool.69f74eb58ed24f0014280d76/ncs.gct",
+  nombre_archivo_csv = "Resultados_Reposicionamiento_LUAD.csv"
 )
-
-# 5. Filtrar los TOP HITS (Los más negativos son los mejores)
-# Buscamos valores de NCS significativamente negativos (ej. < -1.5 o -2.0)
-mis_candidatos_LUSC <- tabla_resultados_LUSC %>%
-  filter(NCS < 0) %>% 
-  arrange(NCS) # El más negativo aparecerá el primero
-
-# 6. Guardar para el TFG
-write.csv(mis_candidatos_LUSC, "Resultados_Reposicionamiento_LUSC.csv", row.names = FALSE)
-
-saveRDS(gct_data_LUSC,"data/gct_data_LUSC.rds")
-saveRDS(mis_candidatos_LUSC,"data/candidatos_LUSC.rds")
-saveRDS(tabla_resultados_LUSC,"data/resultados_LUSC.rds")
+saveRDS(mis_candidatos,"data/candidatos_LUAD.rds")
