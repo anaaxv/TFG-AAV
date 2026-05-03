@@ -971,3 +971,32 @@ write.table(voom_up_LUSC, file = "data/CMap_LUSC_voom_up_top150.txt",
 
 write.table(voom_down_LUSC, file = "data/CMap_LUSC_voom_down_top150.txt", 
             quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+#TRATAMIENTO DE LOS RESULTADOS DE CLUE:
+
+gct_data_LUSC <- parse.gctx("C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Clue Query (CMap)/LUSC/my_analysis.sig_queryl1k_tool.69f7596e8ed24f0014280d7f/ncs.gct")
+metadatos_farmacos <- as.data.frame(gct_data_LUSC@rdesc)
+
+# 3. Extraer la matriz de scores (el NCS está en la matriz @mat)
+scores_ncs <- as.data.frame(gct_data_LUSC@mat)
+
+# 4. Crear la tabla final combinada
+tabla_resultados_LUSC <- data.frame(
+  Nombre_Farmaco = metadatos_farmacos$pert_iname,
+  Mecanismo_Accion = metadatos_farmacos$moa,
+  Target = metadatos_farmacos$target_name,
+  NCS = scores_ncs[,1] # Tomamos la primera columna de resultados
+)
+
+# 5. Filtrar los TOP HITS (Los más negativos son los mejores)
+# Buscamos valores de NCS significativamente negativos (ej. < -1.5 o -2.0)
+mis_candidatos_LUSC <- tabla_resultados_LUSC %>%
+  filter(NCS < 0) %>% 
+  arrange(NCS) # El más negativo aparecerá el primero
+
+# 6. Guardar para el TFG
+write.csv(mis_candidatos_LUSC, "Resultados_Reposicionamiento_LUSC.csv", row.names = FALSE)
+
+saveRDS(gct_data_LUSC,"data/gct_data_LUSC.rds")
+saveRDS(mis_candidatos_LUSC,"data/candidatos_LUSC.rds")
+saveRDS(tabla_resultados_LUSC,"data/resultados_LUSC.rds")
