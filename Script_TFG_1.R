@@ -833,6 +833,19 @@ inputs_shinyDeepDR(
   file_name="shinyDeepDR_LUSC.txt"
 )
 
+#Inputs para ShinyDeepDR de MUTACIONES:
+maf_shinyDeepDR_LUAD <- mut_LUAD_raw %>%
+  dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode)
+
+write.table(maf_shinyDeepDR_LUAD, file = "data/maf_shinyDeepDR_LUAD.maf", 
+            sep = "\t", quote = FALSE, row.names = FALSE)
+
+maf_shinyDeepDR_LUSC <- mut_LUSC_raw %>%
+  dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode)
+
+write.table(maf_shinyDeepDR_LUSC, file = "data/maf_shinyDeepDR_LUSC.maf", 
+            sep = "\t", quote = FALSE, row.names = FALSE)
+
 #Preparamos los inputs para CDRPipe:
 inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
   
