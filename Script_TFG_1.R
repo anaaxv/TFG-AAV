@@ -14,6 +14,9 @@ if (!require("limma", quietly = TRUE))
 if (!require("biomaRt", quietly = TRUE))
   BiocManager::install("biomaRt")
 
+if (!require("cmapR", quietly = TRUE))
+  BiocManager::install("cmapR")
+
 if (!require("DT", quietly = TRUE))
   install.packages("DT")
 
@@ -41,7 +44,8 @@ library(ggplot2)
 library(biomaRt)
 library(pheatmap)
 library(ggrepel)
-library(ggvenn)
+library(ggvenn) #diagramas de Venn, quitar?
+library(cmapR)
 
 #Definimos la ruta al directorio en el que se descargarán los datos y lo creamos:
 dir_gdc <- "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TCGA/GDCdata" #CAMBIAR EN EL FUTURO
@@ -660,7 +664,6 @@ analysis_voom<-function(expr_data,
     )
   }
   
-  # --- EXPORTACIÓN DE FICHEROS (Como en edgeR) ---
   results_folder <- file.path(base_folder, "analysis", "results") 
   if(!dir.exists(results_folder)){
     dir.create(results_folder, recursive=TRUE)
@@ -772,6 +775,8 @@ ggvenn(lista_lung, fill_color = c("#CD5C5C", "#4682B4")) +
 
 #Preparación de los Inputs para las herramientas de reposicionamiento de fármacos:
 #Función que genera los inputs para ShinyDeepDR:
+#Para shinydeepDR tienes que hacer como si solo fuera una muestra
+#Serviría muy bien para medicina personalizada
 #Extrae la mediana de los TPMs de las muestras tumorales:
 
 inputs_shinyDeepDR<-function(expr_data, file_name, folder="data/analysis/results") {
@@ -828,6 +833,36 @@ inputs_shinyDeepDR(
   expr_data = expr_LUSC_def,
   file_name="shinyDeepDR_LUSC.txt"
 )
+
+#Inputs para ShinyDeepDR de MUTACIONES:
+maf_shinyDeepDR_LUAD <- mut_LUAD_raw %>%
+  dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode) %>%
+  mutate(Tumor_Sample_Barcode = "LUAD_Global") %>% # Forzamos una única muestra
+  distinct() # Eliminamos duplicados si el mismo gen muta igual en varios pacientes
+
+# Guardamos el MAF "unificado"
+write.table(maf_shinyDeepDR_LUAD, 
+            file = "data/LUAD_mutations_ShinyDeepDR.maf", 
+            sep = "\t", 
+            quote = FALSE, 
+            row.names = FALSE)
+
+maf_shinyDeepDR_LUSC <- mut_LUSC_raw %>%
+  dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode) %>%
+  mutate(Tumor_Sample_Barcode = "LUSC_Global") %>% # Forzamos una única muestra
+  distinct() # Eliminamos duplicados si el mismo gen muta igual en varios pacientes
+
+write.table(maf_shinyDeepDR_LUSC, 
+            file = "data/LUSC_mutations_ShinyDeepDR.maf", 
+            sep = "\t", 
+            quote = FALSE, 
+            row.names = FALSE)
+
+#maf_shinyDeepDR_LUSC <- mut_LUSC_raw %>%
+#  dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode)
+
+#write.table(maf_shinyDeepDR_LUSC, file = "data/maf_shinyDeepDR_LUSC.maf", 
+#           sep = "\t", quote = FALSE, row.names = FALSE)
 
 #Preparamos los inputs para CDRPipe:
 inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
@@ -892,4 +927,83 @@ inputs_cdrpipe(
   file_name = "CDRpipe_LUSC_Voom.csv"
 )
 
+#Creamos los objetos GCT para CMap (para su herramienta de Query):
 
+#LUAD:
+# 1. Ordenamos UP por significancia (adj.P.Val de menor a mayor)
+# El p-valor más pequeño es el más significativo.
+voom_up_LUAD <- res_LUAD_voom$up_genes %>%
+  arrange(adj.P.Val) %>% 
+  head(150) %>%
+  pull(gene_name)
+
+# 2. Ordenamos DOWN por significancia (adj.P.Val de menor a mayor)
+voom_down_LUAD <- res_LUAD_voom$down_genes %>%
+  arrange(adj.P.Val) %>% 
+  head(150) %>%
+  pull(gene_name)
+
+# 3. Guardar los genes en archivos .txt para subir a CLUE.io
+# Usamos un nombre claro que indique que vienen de voom
+write.table(voom_up_LUAD, file = "data/CMap_LUAD_voom_up_top150.txt", 
+            quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+write.table(voom_down_LUAD, file = "data/CMap_LUAD_voom_down_top150.txt", 
+            quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+# 4. Mensaje de confirmación para que sepas que todo ha ido bien
+cat("Listas de inputs para CMap generadas")
+
+#LUSC:
+voom_up_LUSC <- res_LUSC_voom$up_genes %>%
+  arrange(adj.P.Val) %>% 
+  head(150) %>%
+  pull(gene_name)
+
+voom_down_LUSC <- res_LUSC_voom$down_genes %>%
+  arrange(adj.P.Val) %>% 
+  head(150) %>%
+  pull(gene_name)
+
+write.table(voom_up_LUSC, file = "data/CMap_LUSC_voom_up_top150.txt", 
+            quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+write.table(voom_down_LUSC, file = "data/CMap_LUSC_voom_down_top150.txt", 
+            quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+#TRATAMIENTO DE LOS RESULTADOS DE CLUE:
+analizar_resultados_clue <- function(ruta_gct, nombre_archivo_csv) {
+  
+  gct_data <- cmapR::parse.gctx(ruta_gct)
+  
+  #Extraer metadatos y matriz (manteniendo tu lógica)
+  metadatos_farmacos <- as.data.frame(gct_data@rdesc)
+  scores_ncs <- as.data.frame(gct_data@mat)
+  
+  #Crear la tabla final combinada
+  tabla_resultados <- data.frame(
+    Nombre_Farmaco = metadatos_farmacos$pert_iname,
+    Mecanismo_Accion = metadatos_farmacos$moa,
+    Target = metadatos_farmacos$target_name,
+    NCS = scores_ncs[,1] # Tomamos la primera columna de resultados
+  )
+  
+  #Filtrar los TOP HITS (Los más negativos son los mejores)
+  mis_candidatos <- tabla_resultados %>%
+    filter(NCS < 0) %>% 
+    arrange(NCS)
+  
+  # 5. Guardar los resultados en la carpeta de trabajo
+  write.csv(mis_candidatos, nombre_archivo_csv, row.names = FALSE)
+  
+  # 6. Devolver el objeto para poder verlo en R
+  return(mis_candidatos)
+}
+
+
+#para LUAD:
+res_LUAD <- analizar_clue_resultados(
+  ruta_gct = "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Clue Query (CMap)/LUAD/my_analysis.sig_queryl1k_tool.69f74eb58ed24f0014280d76/ncs.gct",
+  nombre_archivo_csv = "Resultados_Reposicionamiento_LUAD.csv"
+)
+saveRDS(mis_candidatos,"data/candidatos_LUAD.rds")
