@@ -776,6 +776,8 @@ ggvenn(lista_lung, fill_color = c("#CD5C5C", "#4682B4")) +
 
 #Preparación de los Inputs para las herramientas de reposicionamiento de fármacos:
 #Función que genera los inputs para ShinyDeepDR:
+#Para shinydeepDR tienes que hacer como si solo fuera una muestra
+#Serviría muy bien para medicina personalizada
 #Extrae la mediana de los TPMs de las muestras tumorales:
 
 inputs_shinyDeepDR<-function(expr_data, file_name, folder="data/analysis/results") {
@@ -835,16 +837,33 @@ inputs_shinyDeepDR(
 
 #Inputs para ShinyDeepDR de MUTACIONES:
 maf_shinyDeepDR_LUAD <- mut_LUAD_raw %>%
-  dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode)
+  dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode) %>%
+  mutate(Tumor_Sample_Barcode = "LUAD_Global") %>% # Forzamos una única muestra
+  distinct() # Eliminamos duplicados si el mismo gen muta igual en varios pacientes
 
-write.table(maf_shinyDeepDR_LUAD, file = "data/maf_shinyDeepDR_LUAD.maf", 
-            sep = "\t", quote = FALSE, row.names = FALSE)
+# Guardamos el MAF "unificado"
+write.table(maf_shinyDeepDR_LUAD, 
+            file = "data/LUAD_mutations_ShinyDeepDR.maf", 
+            sep = "\t", 
+            quote = FALSE, 
+            row.names = FALSE)
 
 maf_shinyDeepDR_LUSC <- mut_LUSC_raw %>%
-  dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode)
+  dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode) %>%
+  mutate(Tumor_Sample_Barcode = "LUSC_Global") %>% # Forzamos una única muestra
+  distinct() # Eliminamos duplicados si el mismo gen muta igual en varios pacientes
 
-write.table(maf_shinyDeepDR_LUSC, file = "data/maf_shinyDeepDR_LUSC.maf", 
-            sep = "\t", quote = FALSE, row.names = FALSE)
+write.table(maf_shinyDeepDR_LUSC, 
+            file = "data/LUSC_mutations_ShinyDeepDR.maf", 
+            sep = "\t", 
+            quote = FALSE, 
+            row.names = FALSE)
+
+#maf_shinyDeepDR_LUSC <- mut_LUSC_raw %>%
+#  dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode)
+
+#write.table(maf_shinyDeepDR_LUSC, file = "data/maf_shinyDeepDR_LUSC.maf", 
+#           sep = "\t", quote = FALSE, row.names = FALSE)
 
 #Preparamos los inputs para CDRPipe:
 inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
