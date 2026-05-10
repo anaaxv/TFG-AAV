@@ -29,9 +29,6 @@ if (!require("pheatmap", quietly = TRUE))
 if (!require("ggrepel", quietly = TRUE))
   install.packages("ggrepel")
 
-if (!require("ggvenn", quietly = TRUE))
-  install.packages("ggvenn")
-
 if (!require("stringr", quietly = TRUE))
   install.packages("stringr")
 
@@ -47,7 +44,6 @@ library(ggplot2)
 library(biomaRt)
 library(pheatmap)
 library(ggrepel)
-library(ggvenn) #diagramas de Venn, quitar?
 library(cmapR)
 library(stringr)
 
@@ -740,34 +736,6 @@ saveRDS(common_deg_LUSC,"data/common_deg_LUSC.rds")
 
 common_lung_deg<-intersect(common_deg_LUAD, common_deg_LUSC)
 saveRDS(common_lung_deg,"data/common_lung_deg.rds")
-
-
-###DIAGRAMAS DE Venn (revisar):
-
-lista_LUAD <- list(
-  EdgeR = res_LUAD_edgeR$significant$id_cruce,
-  Voom  = res_LUAD_voom$significant$id_cruce
-)
-
-ggvenn(lista_LUAD, fill_color = c("#0073C2FF", "#EFC000FF")) +
-  labs(title = "LUAD: Consenso EdgeR vs Voom")
-
-lista_LUSC <- list(
-  EdgeR = res_LUSC_edgeR$significant$id_cruce,
-  Voom  = res_LUSC_voom$significant$id_cruce
-)
-
-ggvenn(lista_LUSC, fill_color = c("#0073C2FF", "#EFC000FF")) +
-  labs(title = "LUSC: Consenso EdgeR vs Voom")
-
-lista_lung <- list(
-  `LUAD` = common_deg_LUAD,
-  `LUSC` = common_deg_LUSC
-)
-
-ggvenn(lista_lung, fill_color = c("#CD5C5C", "#4682B4")) +
-
-  labs(title = "Genes compartidos entre LUAD y LUSC")
 
 
 #Preparación de los Inputs para las herramientas de reposicionamiento de fármacos:
