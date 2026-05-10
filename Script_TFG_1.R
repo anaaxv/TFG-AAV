@@ -3,9 +3,9 @@ if (!require("BiocManager", quietly=TRUE))
   install.packages("BiocManager")
 
 if (!require("TCGAbiolinks", quietly = TRUE))
-  BiocManager::install("TCGAbiolinks")  #REVISAR
+  BiocManager::install("TCGAbiolinks")  
 
-if (!require("edgeR", quietly = TRUE)) #REVISAR
+if (!require("edgeR", quietly = TRUE)) 
   BiocManager::install("edgeR")
 
 if (!require("limma", quietly = TRUE))
@@ -32,6 +32,9 @@ if (!require("ggrepel", quietly = TRUE))
 if (!require("ggvenn", quietly = TRUE))
   install.packages("ggvenn")
 
+if (!require("stringr", quietly = TRUE))
+  install.packages("stringr")
+
 
 #Cargamos las librerías que vamos a usar:
 library(TCGAbiolinks)
@@ -46,6 +49,7 @@ library(pheatmap)
 library(ggrepel)
 library(ggvenn) #diagramas de Venn, quitar?
 library(cmapR)
+library(stringr)
 
 #Definimos la ruta al directorio en el que se descargarán los datos y lo creamos:
 dir_gdc <- "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TCGA/GDCdata" #CAMBIAR EN EL FUTURO
@@ -128,7 +132,7 @@ query_clinical_LUSC<-GDCquery(
 GDCdownload(query_clinical_LUSC, directory = dir_gdc)
 clinical_LUSC_BCRtab<-GDCprepare(query_clinical_LUSC, directory = dir_gdc)
 
-#Guardo los objetos que he obtenido, para poder cargarlos en cualquier momento, sin necesidad de volver a correr el código:
+#Guardo los objetos que he obtenido en un nuevo directorio al que llamaré "data":
 dir.create("data")
 saveRDS(expr_LUAD_raw, file="data/expr_LUAD_raw.rds")
 saveRDS(expr_LUSC_raw, file="data/expr_LUSC_raw.rds")
@@ -141,7 +145,7 @@ saveRDS(clinical_LUSC_BCRtab, file="data/clinical_LUSC_BCRtab.rds")
 #DATOS DE EXPRESIÓN: eliminamos pacientes duplicados
 #expr_LUAD es un SummarizedExperiment en el que las filas son los genes y las columnas las muestras
 #de RNA-seq, cada columna corresponde a un archivo .tsv
-#cuando tcgabiolinks hace gdcprepare() pone el barcode de la muestra como nombre de la columna
+#cuando TCGAbiolinks hace gdcprepare() pone el barcode de la muestra como nombre de la columna
 #----------------------
 
 procesar_expr<-function(expr, 
@@ -162,7 +166,7 @@ procesar_expr<-function(expr,
   colData(expr)$sample_type<-sample_type
   expr<-expr[,!is.na(colData(expr)$sample_type)] #como solo guardamos los sample type de las 01 y 11, quitamos en las que no haya nada, porque podrán ser por ejemplo, 02 (tumor solido recurrente) que no nos interesan
   
-  #actualizamos barcodes porque hemos quitado columnas de expr
+  #Actualizamos barcodes porque hemos quitado columnas de expr
   barcodes<-colnames(expr)
   
   #Calcular tamaño de librería:
@@ -174,7 +178,7 @@ procesar_expr<-function(expr,
   coldata_df$barcode<-barcodes
   
   #Seleccionamos una muestra por paciente y por tipo de tumor (la de mayor library size, en este caso):
-  #De cada paciente se guardarán como máximo los datos de dos muestras: una de tumor y una normal
+  #De cada paciente se guardarán como máximo los datos de dos muestras: una de tumor y una sana:
   samples_to_keep<-pull(
     slice_max(
       group_by(coldata_df, patient_id, sample_type),
@@ -192,7 +196,7 @@ procesar_expr<-function(expr,
   
   expr_def<-expr_unique[,colData(expr_unique)$patient_id %in% common_patients]
   
-  #Si un paciente tiene TUMOR y NORMAL, quedarnos solo con NORMAL:
+  #Si un paciente tiene TUMOR y NORMAL, quedarnos solo con NORMAL, puesto que es la menos abundante en este dataset:
   
   df<-as.data.frame(colData(expr_def))
   
@@ -218,7 +222,7 @@ procesar_expr<-function(expr,
   
 }
 
-#Aplicamos la función que acabamos de crear a LUAD:
+#Aplicamos la función que acabamos de crear a LUAD para obtener los perfiles de expresión definitivos:
 res_LUAD<-procesar_expr(
   expr=expr_LUAD_raw,
   clinical_patients=clinical_LUAD_BCRtab$clinical_patient_luad$bcr_patient_barcode
@@ -230,7 +234,7 @@ common_patients_LUAD<-res_LUAD$common_patients
 saveRDS(expr_LUAD_def,"data/expr_LUAD_def.rds")
 saveRDS(common_patients_LUAD, "data/common_patients_LUAD.rds")
 
-#Aplicamos la función a LUSC:
+#Hacemos lo mismo para LUSC:
 res_LUSC<-procesar_expr(
   expr=expr_LUSC_raw,
   clinical_patients=clinical_LUSC_BCRtab$clinical_patient_lusc$bcr_patient_barcode
@@ -242,56 +246,47 @@ common_patients_LUSC<-res_LUSC$common_patients
 saveRDS(expr_LUSC_def,"data/expr_LUSC_def.rds")
 saveRDS(common_patients_LUSC, "data/common_patients_LUSC.rds")
 
-#table(colData(expr_LUAD_def)$sample_type)
-#table(colData(expr_LUAD_def)$sample_type_code)
-#table(colData(expr_LUSC_def)$sample_type)
-#table(colData(expr_LUSC_def)$sample_type_code)
-
 preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Experiment
                            group_variable="sample_type", #Nombre de la columna en colData
                            reference_level="Normal",
                            plot_prefix="Edge R",
                            plots=list(boxplot=TRUE, mds=TRUE, pca=TRUE)){
-  #Extraer matriz de counts:
+  #Extraemos matriz de counts:
   #si hay NA que se quede con 0 y se asegura de que todo sea numerico 
   counts<-assay(expr_data)  #Assay es una función del paquete SummarizedExperiment. Devuelve la matriz de expresión (filas=genes, columnas=muestras, valores=counts)
   counts<-as.matrix(counts) #para asegurar que sea matriz estandar
   mode(counts)<-"numeric"
   counts[is.na(counts)]<-0  #busca los NA y los convierte en 0
   
-  #counts[]<-lapply(as.data.frame(counts), function(x) as.numeric(as.character(x))) #convierte a data frame, recorre columna por columna, fuerza que sea numerico, y lo vuelve a meter en la matriz
-  
-  
-  #Definir grupo:
-  group<-factor(colData(expr_data)[[group_variable]]) #la variable "tumor" o "normal" se convierte en variable categórica al usar factor. Con el doble corchete se extrae de verdad lo que hay en esa columna
+  #Definimos grupo:
+  group<-factor(colData(expr_data)[[group_variable]]) #la variable "tumor" o "normal" se convierte en variable categórica al usar factor. Con el doble corchete se extrae el contenido de esa columna
   group<-relevel(group,ref=reference_level) #define el grupo de referencia en el modelo, en este caso, las muestras "normales"
   
-  #Crear DGElist:
-  dgl<-DGEList(counts=counts,group=group) #creamos la dgelist, estructura base para edgeR
+  #Creamos DGElist,estructura base para el análisis de edgeR:
+  dgl<-DGEList(counts=counts,group=group) 
   
   info_genes<-as.data.frame(rowData(expr_data))
-  info_genes$id_cruce<-sub("\\..*", "", rownames(info_genes)) #el id_cruce es el ensembl id sin el nº de versión
+  info_genes$id_cruce<-sub("\\..*", "", rownames(info_genes)) #el id_cruce es el Ensembl ID sin el nº de versión
   
-  #Añadir gene_type:
-  #dgl$genes<-info_genes[, c("id_cruce", "gene_name", "gene_type")]
+  #Añadimos tipo de gen:
   dgl$genes <- info_genes[rownames(dgl), c("id_cruce", "gene_name", "gene_type")]
   
   #Filtrado de genes poco expresados:
-  keep<-filterByExpr(dgl, group=group)  #elimina genes con muy baja expresión, reduce ruido, mejora potencia estadística etc
+  keep<-filterByExpr(dgl, group=group)  #elimina genes con muy baja expresión, reduce ruido, mejora potencia estadística etc. Es la que más se adapta a las condiciones experimentales
   #umbral_muestras<-ceiling(0.10*ncol(counts))
   #keep<-rowSums(counts>=10)>=umbral_muestras
   
-  #cat: como print pero mejor 
   cat("Genes totales:", nrow(counts), "\n")
   cat("Genes eliminados:", sum(!keep), "\n")
   cat("Genes retenidos:", sum(keep), "\n")
   
-  dgl<-dgl[keep,,keep.lib.sizes=FALSE] #nos quedamos solo con los genes que hayan pasado el filtro, haces que se recalculen los tamaños de biblioteca
+  dgl<-dgl[keep,,keep.lib.sizes=FALSE] #nos quedamos solo con los genes que hayan pasado el filtro, hacemos que se recalculen los tamaños de biblioteca
   rm(keep)
   
   #Normlización TMM:
-  dgl<-calcNormFactors(dgl, method="TMM") #Normalización Trimmed Mean of M-Values, corrige diferencias de composición, de profundidas de secuenciación...
+  dgl<-calcNormFactors(dgl, method="TMM") #Normalización Trimmed Mean of M-Values, corrige diferencias de composición, de profundidad de secuenciación...
   
+  #Generamos los diferentes gráficos indicados por el usuario:
   if (plots$boxplot){   #el boxplot muestra que el rango de counts y las posiciones centrales son similares en muestras diferentes después de la normalizacion
     logCPM<-cpm(dgl, log=TRUE) #log-transformed counts per million
     boxplot(logCPM, 
@@ -320,7 +315,8 @@ preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Expe
       group=group
     )
     
-    var_expl<- round(100*pca$sdev^2/sum(pca$sdev^2),1) #varianza explicada
+    #Varianza explicada:
+    var_expl<- round(100*pca$sdev^2/sum(pca$sdev^2),1) 
     
     
     p<-ggplot(pca_df, aes(PC1,PC2,color=group))+
@@ -340,21 +336,21 @@ preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Expe
 
 analysis_edgeR<-function(dgl,
                          group,
-                         lfc_threshold=1, #cambiar a 1.5???
-                         fdr_threshold=0.05, #cambiar a 0.05???
+                         lfc_threshold=1, 
+                         fdr_threshold=0.05, 
                          plots=list(bcv=TRUE, ma=TRUE, volcano=TRUE, hm=TRUE),
                          base_folder="data",
                          plot_prefix="Edge R"){ 
   #Diseño:
   design<-model.matrix(~group) #convierte el modelo en matriz de diseño
   
-  #Estimar dispersión:
+  #Estimamos dispersión:
   dgl<-estimateDisp(dgl,design) #se calcula la dispersión, que mide la variabilidad biologica
   
-  #Ajustar modelo: 
+  #Ajustamos modelo: 
   fit<-glmQLFit(dgl,design) #se ajusta al modelo QL Quasi-likelihood
   
-  #Test de umbral de fold change:  Incluir también glmQLFTest??? para ver cualquier cambio, es decir, logFC distinto de 0
+  #Test de umbral de fold change:  
   treat<-glmTreat(fit,coef=2,lfc=lfc_threshold) 
   
   #Resultados completos:
@@ -365,15 +361,16 @@ analysis_edgeR<-function(dgl,
   } 
   
   
-  #Resultados significativos:
+  #Resultados significativos (FDR menor que el umbral establecido):
   significant<-subset(all_results, FDR<fdr_threshold)
   
-  #Separar up y down:
+  #Separamos los genes en up y down-regulated:
   up<-subset(significant, logFC>0) #Sobreexpresado en tumor
   down<-subset(significant, logFC<0) #Infraexpresado en tumor
   
   cat("Número de DEGs (EdgeR):", nrow(significant), " (Up:", nrow(up), ", Down:", nrow(down), ")\n")
   
+  #Generamos las gráficas indicadas por el usuario:
   if(plots$bcv) {
     plotBCV(dgl, main=paste(plot_prefix,"- BCV Plot"))
   }
@@ -382,7 +379,7 @@ analysis_edgeR<-function(dgl,
     plotSmear(treat, de.tags=rownames(significant),
               panel.first=NULL, main=paste(plot_prefix, "- MA Plot at FDR <", fdr_threshold))
   }
-  #REVISARRR
+  
   if (plots$volcano){
     
     volcano_df<-all_results
@@ -425,46 +422,46 @@ analysis_edgeR<-function(dgl,
            y="-Log10 FDR")+
       theme_minimal()
     
-    print(p) #pq en ggplot no salen los graficos automaticamente
+    print(p) #porque ggplot no muestra los gráficos si no lo indicas explícitamente
     
     volcano_deg<-subset(volcano_df, DEG!="Not significant")                         
   }
   
   if (plots$hm && nrow(significant) > 0) {
-    # 1. Seleccionar los IDs de los top genes
+    #Seleccionamos los IDs de los top genes:
     top_genes_hm <- significant %>%
       dplyr::arrange(FDR) %>% 
       head(50) %>%
       dplyr::pull(id_cruce)
     
-    # 2. Extraer los counts (Para edgeR usamos logCPM)
-    heatmap_data <- cpm(dgl, log=TRUE) # <<-- CORREGIDO
+    #Extraemos los counts (para edgeR usamos logCPM):
+    heatmap_data <- cpm(dgl, log=TRUE)
     rownames(heatmap_data) <- sub("\\..*", "", rownames(heatmap_data))
     heatmap_data <- heatmap_data[rownames(heatmap_data) %in% top_genes_hm, ]
     
-    # --- ORDENAR LAS MUESTRAS POR GRUPO ---
+    #Ordenamos las muestras por grupo:
     orden_muestras <- order(group) 
     heatmap_data <- heatmap_data[, orden_muestras] 
     
-    # 3. Preparar la anotación
+    #Preparamos la anotación:
     annotation_col <- data.frame(Group = group[orden_muestras]) 
     rownames(annotation_col) <- colnames(heatmap_data)
     
-    # 4. Dibujar el heatmap
+    #Dibujamos el heatmap:
     pheatmap::pheatmap(
       heatmap_data, 
       scale = "row", 
       annotation_col = annotation_col,
-      show_rownames = (nrow(heatmap_data) < 50), # Mostrar nombres si son pocos
+      show_rownames = (nrow(heatmap_data) < 50), #Mostrar nombres si son pocos
       show_colnames = FALSE,
-      cluster_cols = FALSE,           # Mantiene el orden Normal vs Tumor
+      cluster_cols = FALSE,           #Mantiene el orden Normal vs Tumor
       cluster_rows = TRUE,            
       clustering_distance_rows = "correlation", 
       main = paste(plot_prefix, "- Heatmap")
     )
   }
   
-  
+  #Creamos carpeta de resultados:
   results_folder <- file.path(base_folder, "analysis", "results")
   if(!dir.exists(results_folder)){
     dir.create(results_folder, recursive=TRUE)
@@ -484,7 +481,7 @@ analysis_edgeR<-function(dgl,
               sep="\t",
               row.names=FALSE)
   
-  # GUARDAR GENES SIGNIFICATIVOS protein-coding
+  #Guardamos los genes significativos que codifiquen para proteína:
   significant_pc <- significant[significant$gene_type == "protein_coding" & !is.na(significant$gene_type), ]
   up_pc <- significant_pc[significant_pc$logFC > 0, ]
   down_pc <- significant_pc[significant_pc$logFC < 0, ]
@@ -529,6 +526,7 @@ complete_edgeR_analysis<-function(expr_data,
   return(results)
 }
 
+#Función de análisis análoga a la de EdgeR:
 analysis_voom<-function(expr_data,
                         group_variable="sample_type",
                         reference_level="Normal",
@@ -557,7 +555,6 @@ analysis_voom<-function(expr_data,
   umbral_muestras<-ceiling(0.10*ncol(counts))
   keep<-rowSums(counts>=10)>=umbral_muestras
   
-  #cat: como print pero mejor 
   cat("Genes totales:", nrow(counts), "\n")
   cat("Genes eliminados:", sum(!keep), "\n")
   cat("Genes retenidos:", sum(keep), "\n")
@@ -583,7 +580,7 @@ analysis_voom<-function(expr_data,
   results$DEG[results$logFC > lfc_threshold & results$adj.P.Val < fdr_threshold] <- "Up"
   results$DEG[results$logFC < -lfc_threshold & results$adj.P.Val < fdr_threshold] <- "Down"
   
-  #para ponerlo en el mismo formato que la de edgeR:
+  #Para ponerlo en el mismo formato que la de edgeR:
   cols_principales <- c("id_cruce", "gene_name", "logFC", "AveExpr", "P.Value", "adj.P.Val")
   cols_restantes <- setdiff(colnames(results), c(cols_principales, "DEG")) 
   results <- results[, c(cols_principales, cols_restantes, "DEG")] 
@@ -594,6 +591,7 @@ analysis_voom<-function(expr_data,
   
   cat("Número de DEGs (voom):", nrow(significant), " (Up:", nrow(up_genes), ", Down:", nrow(down_genes), ")\n")
   
+  #Generamos las gráficas:
   if (plots$volcano){
     volcano_df<-results
     
@@ -629,28 +627,27 @@ analysis_voom<-function(expr_data,
   }
   
   if (plots$hm && nrow(significant) > 0) {
-    # 1. Seleccionar los IDs de los top genes
+    #Seleccionamos los IDs de los top genes:
     top_genes_hm <- significant %>%
       arrange(adj.P.Val) %>% # O FDR en edgeR
       head(50) %>%
       pull(id_cruce)
     
-    # 2. Extraer los counts (v$E para voom o logCPM para edgeR)
-    # Suponiendo que estamos en voom (en edgeR usarías el objeto logCPM)
+    #Extraer los counts (v$E para voom o logCPM para edgeR):
     heatmap_data <- v$E 
     rownames(heatmap_data) <- sub("\\..*", "", rownames(heatmap_data))
     heatmap_data <- heatmap_data[rownames(heatmap_data) %in% top_genes_hm, ]
     
-    #ORDENAR LAS MUESTRAS POR GRUPO.
+    #Ordenamos las muestras por grupo:
     # Creamos un índice para ordenar: primero Normal, luego Tumor (según tus niveles)
     orden_muestras <- order(group)
     heatmap_data <- heatmap_data[, orden_muestras] 
     
-    # 3. Preparar la anotación con el nuevo orden
+    #Preparamos la anotación con el nuevo orden:
     annotation_col <- data.frame(Group = group[orden_muestras]) # <<-- CAMBIO
     rownames(annotation_col) <- colnames(heatmap_data)
     
-    # 4. Dibujar el heatmap
+    #Generamos el heatmap:
     pheatmap(
       heatmap_data, 
       scale = "row", 
@@ -669,17 +666,17 @@ analysis_voom<-function(expr_data,
     dir.create(results_folder, recursive=TRUE)
   }
   
-  # Guardar DEGs significativos
+  #Guardamos DEGs significativos:
   write.table(significant, 
               file=file.path(results_folder, paste0(plot_prefix, "_DEGs_FDR_",fdr_threshold,"_LFC_",lfc_threshold,".txt")),
               quote=FALSE, sep="\t", row.names=FALSE) 
   
-  # Guardar tabla completa
+  # Guardamos tabla completa:
   write.table(results, 
               file=file.path(results_folder, paste0(plot_prefix, "_all_genes.txt")),
               quote=FALSE, sep="\t", row.names=FALSE)
   
-  #Guardamos los significativos que codifiquen para prote:
+  #Guardamos los significativos que codifiquen para proteína:
   significant_pc <- significant[significant$gene_type == "protein_coding" & !is.na(significant$gene_type), ]
   up_pc <- significant_pc[significant_pc$DEG == "Up", ]
   down_pc <- significant_pc[significant_pc$DEG == "Down", ]
@@ -745,7 +742,7 @@ common_lung_deg<-intersect(common_deg_LUAD, common_deg_LUSC)
 saveRDS(common_lung_deg,"data/common_lung_deg.rds")
 
 
-###DIAGRAMAS DE Venn MUY FEOS
+###DIAGRAMAS DE Venn (revisar):
 
 lista_LUAD <- list(
   EdgeR = res_LUAD_edgeR$significant$id_cruce,
@@ -804,10 +801,10 @@ inputs_shinyDeepDR<-function(expr_data, file_name, folder="data/analysis/results
     Promedio_Tumoral = mediana_tpm
   )
   
-  #quitar NAs:
+  #Eliminamos NAs:
   df_shiny <- df_shiny[!is.na(df_shiny$Gene), ]
   
-  # Quietar duplicados:
+  #Eliminamos duplicados:
   #Agrupamos por símbolo genético y sumamos los TPMs de las variantes/isoformas (en el caso de que varios ensembl id apunten a un mismo genesymbol)
   df_shiny <- df_shiny %>%
     group_by(Gene) %>%
@@ -815,7 +812,7 @@ inputs_shinyDeepDR<-function(expr_data, file_name, folder="data/analysis/results
     ungroup() %>%
     as.data.frame()
   
-  #guardamos:
+  #Guardamos:
   ruta_salida <- file.path(folder, file_name)
   write.table(df_shiny, file = ruta_salida, sep = "\t", quote = FALSE, row.names = FALSE)
   
@@ -840,7 +837,7 @@ maf_shinyDeepDR_LUAD <- mut_LUAD_raw %>%
   mutate(Tumor_Sample_Barcode = "LUAD_Global") %>% # Forzamos una única muestra
   distinct() # Eliminamos duplicados si el mismo gen muta igual en varios pacientes
 
-# Guardamos el MAF "unificado"
+# Guardamos el MAF "unificado":
 write.table(maf_shinyDeepDR_LUAD, 
             file = "data/LUAD_mutations_ShinyDeepDR.maf", 
             sep = "\t", 
@@ -858,12 +855,6 @@ write.table(maf_shinyDeepDR_LUSC,
             quote = FALSE, 
             row.names = FALSE)
 
-#maf_shinyDeepDR_LUSC <- mut_LUSC_raw %>%
-#  dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode)
-
-#write.table(maf_shinyDeepDR_LUSC, file = "data/maf_shinyDeepDR_LUSC.maf", 
-#           sep = "\t", quote = FALSE, row.names = FALSE)
-
 #Preparamos los inputs para CDRPipe:
 inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
   
@@ -872,7 +863,7 @@ inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
     dir.create(folder, recursive=TRUE)
   }
   
-  #detectar si es Voom o edgeR para elegir la columna del p-valor:
+  #detectar si es Voom o edgeR para elegir la columna del FDR:
   if ("adj.P.Val" %in% colnames(df_degs)) {
     col_pval <- "adj.P.Val"   # Es Voom
   } else if ("FDR" %in% colnames(df_degs)) {
@@ -881,7 +872,7 @@ inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
     stop("No se encuentra adj.P.Val ni FDR en los datos.")
   }
   
-  #seleccionamos y renombramos las columnas según lo que pide CDRpipe:
+  #Seleccionamos y renombramos las columnas según lo que pide CDRpipe:
   df_cdr <- df_degs %>%
     dplyr::select(
       SYMBOL = gene_name,
@@ -889,7 +880,7 @@ inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
       p_val_adj = all_of(col_pval)
     )
   
-  #limpieza de NAs
+  #Limpieza de NAs
   df_cdr <- df_cdr %>% filter(!is.na(SYMBOL) & SYMBOL != "")
   
   #Manejo de duplicados(Nos quedamos con la variante que tenga el p-valor más significativo (el menor)):  
@@ -899,59 +890,85 @@ inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
     ungroup() %>%
     as.data.frame()
   
-  #Guardamos en formato CSV (comma-separated):
+  #Guardamos en formato CSV:
   ruta_salida <- file.path(folder, file_name)
   write.csv(df_cdr, file = ruta_salida, row.names = FALSE, quote = FALSE)
   
   cat("Archivo para CDRpipe guardado en:", ruta_salida, "\n")
   cat("Total de genes exportados:", nrow(df_cdr), "\n")
+  
+  return(df_cdr)
 }
-
-#CAMBIARR:
-#inputs_cdrpipe(
-#df_degs = res_LUAD_voom$significant, # Usas directamente el resultado de la función
-#file_name = "CDRpipe_LUAD_Voom.csv"
-#)
 
 degs_voom_luad <- read.delim("C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/FDR0.01LFC2/LUAD - Voom_DEGs_FDR_0.01_LFC_2.txt", sep = "\t", header = TRUE)
 
-inputs_cdrpipe(
+input_limpio_luad<-inputs_cdrpipe(
   df_degs = degs_voom_luad, 
   file_name = "CDRpipe_LUAD_Voom.csv"
 )
 
 degs_voom_lusc <- read.delim("C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/FDR0.01LFC2/LUSC - Voom_DEGs_FDR_0.01_LFC_2.txt", sep = "\t", header = TRUE)
 
-inputs_cdrpipe(
+input_limpio_lusc<-inputs_cdrpipe(
   df_degs = degs_voom_lusc, 
   file_name = "CDRpipe_LUSC_Voom.csv"
+)
+
+#Generación de inputs para iLINCS basándonos en el objeto de CDRpipe:
+inputs_ilincs <- function(df_cdr, file_name, folder = "data/analysis/results") {
+  
+  #Creamos directorio si no existe:
+  if(!dir.exists(folder)){
+    dir.create(folder, recursive = TRUE)
+  }
+
+  ruta_salida_ilincs <- file.path(folder, file_name)
+  
+  #Guardamos en formato TXT delimitado por tabuladores (\t)
+  write.table(
+    df_cdr, 
+    file = ruta_salida_ilincs, 
+    sep = "\t", 
+    row.names = FALSE, 
+    col.names = FALSE, #sin nombres de columna
+    quote = FALSE
+  )
+  cat("Archivo para iLINCS guardado en:", ruta_salida_ilincs, "\n")
+}
+
+inputs_ilincs(
+  df_cdr = input_limpio_luad, 
+  file_name = "iLINCS_LUAD_voom.txt"
+)
+
+inputs_ilincs(
+  df_cdr = input_limpio_lusc, 
+  file_name = "iLINCS_LUSC_voom.txt"
 )
 
 #Creamos los objetos GCT para CMap (para su herramienta de Query):
 
 #LUAD:
-# 1. Ordenamos UP por significancia (adj.P.Val de menor a mayor)
-# El p-valor más pequeño es el más significativo.
+#Ordenamos UP por significancia (adj.P.Val de menor a mayor)
+#El p-valor más pequeño es el más significativo.
 voom_up_LUAD <- res_LUAD_voom$up_genes %>%
   arrange(adj.P.Val) %>% 
   head(150) %>%
   pull(gene_name)
 
-# 2. Ordenamos DOWN por significancia (adj.P.Val de menor a mayor)
+#Ordenamos DOWN por significancia (adj.P.Val de menor a mayor)
 voom_down_LUAD <- res_LUAD_voom$down_genes %>%
   arrange(adj.P.Val) %>% 
   head(150) %>%
   pull(gene_name)
 
-# 3. Guardar los genes en archivos .txt para subir a CLUE.io
-# Usamos un nombre claro que indique que vienen de voom
+#Guardamos los genes en archivos .txt para subir a CLUE.io
 write.table(voom_up_LUAD, file = "data/CMap_LUAD_voom_up_top150.txt", 
             quote = FALSE, row.names = FALSE, col.names = FALSE)
 
 write.table(voom_down_LUAD, file = "data/CMap_LUAD_voom_down_top150.txt", 
             quote = FALSE, row.names = FALSE, col.names = FALSE)
 
-# 4. Mensaje de confirmación para que sepas que todo ha ido bien
 cat("Listas de inputs para CMap generadas")
 
 #LUSC:
@@ -971,21 +988,22 @@ write.table(voom_up_LUSC, file = "data/CMap_LUSC_voom_up_top150.txt",
 write.table(voom_down_LUSC, file = "data/CMap_LUSC_voom_down_top150.txt", 
             quote = FALSE, row.names = FALSE, col.names = FALSE)
 
+#------------
 #TRATAMIENTO DE LOS RESULTADOS DE CLUE:
 analizar_resultados_clue <- function(ruta_gct, nombre_archivo_csv) {
   
   gct_data <- cmapR::parse.gctx(ruta_gct)
   
-  #Extraer metadatos y matriz (manteniendo tu lógica)
+  #Extraemos metadatos y matriz:
   metadatos_farmacos <- as.data.frame(gct_data@rdesc)
   scores_ncs <- as.data.frame(gct_data@mat)
   
-  #Crear la tabla final combinada
+  #Creamos la tabla final combinada:
   tabla_resultados <- data.frame(
     Nombre_Farmaco = metadatos_farmacos$pert_iname,
     Mecanismo_Accion = metadatos_farmacos$moa,
     Target = metadatos_farmacos$target_name,
-    NCS = scores_ncs[,1] # Tomamos la primera columna de resultados
+    NCS = scores_ncs[,1] #Tomamos la primera columna de resultados
   )
   
   #Filtrar los TOP HITS (Los más negativos son los mejores)
@@ -993,17 +1011,131 @@ analizar_resultados_clue <- function(ruta_gct, nombre_archivo_csv) {
     filter(NCS < 0) %>% 
     arrange(NCS)
   
-  # 5. Guardar los resultados en la carpeta de trabajo
+  #Guardamos los resultados en la carpeta de trabajo:
   write.csv(mis_candidatos, nombre_archivo_csv, row.names = FALSE)
   
-  # 6. Devolver el objeto para poder verlo en R
+  #Devolvemos el objeto de los fármacos candidatos:
   return(mis_candidatos)
 }
 
 
-#para LUAD:
-res_LUAD <- analizar_clue_resultados(
-  ruta_gct = "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Clue Query (CMap)/LUAD/my_analysis.sig_queryl1k_tool.69f74eb58ed24f0014280d76/ncs.gct",
+#Ejecutamos la función para LUAD:
+res_LUAD_CMap <- analizar_clue_resultados(
+  ruta_gct = "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Clue Query (CMap)/query_LUAD/my_analysis.sig_queryl1k_tool.69f74eb58ed24f0014280d76/ncs.gct",
   nombre_archivo_csv = "Resultados_Reposicionamiento_LUAD.csv"
 )
 saveRDS(mis_candidatos,"data/candidatos_LUAD.rds")
+
+res_LUSC_CMap <- analizar_clue_resultados(
+  ruta_gct = "data/analysis/results/Resultados reposicionamiento/Clue Query (CMap)/query_LUSC/my_analysis.sig_queryl1k_tool.69f7596e8ed24f0014280d7f/ncs.gct",
+  nombre_archivo_csv = "Resultados_Reposicionamiento_LUAD.csv"
+)
+saveRDS(mis_candidatos,"data/candidatos_LUSC.rds")
+
+
+#FUNCIÓN para obtener fármacos comunes a los 4 métodos:
+
+obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shiny, archivo_salida) {
+  
+  #Carga de resultados de reposicionamiento:
+  df_cdr_LUAD <- read.csv(ruta_cdr)
+  df_cmap_LUAD <- read.csv(ruta_cmap)
+  df_ilincs_LUAD <- read.delim(ruta_ilincs, sep = "\t")
+  df_shiny_LUAD <- read.csv(ruta_shiny)
+  
+  #Normalización y firltrado inicial:
+  #CDRpipe: Columna 'name'
+  df_cdr_clean <- df_cdr_LUAD %>%
+    mutate(drug_lower = tolower(trimws(name))) %>%
+    filter(cmap_score < 0) # Filtramos por reversión
+  
+  #CMap (Clue): Columna 'Nombre_Farmaco'
+  df_cmap_clean <- df_cmap_LUAD %>%
+    mutate(drug_lower = tolower(trimws(Nombre_Farmaco))) %>%
+    filter(NCS < 0) # Filtramos por conectividad negativa
+  
+  #iLINCS: Columna 'Perturbagen'
+  df_ilincs_clean <- df_ilincs_LUAD %>%
+    mutate(drug_lower = tolower(trimws(Perturbagen))) %>%
+    filter(Concordance < 0) # Solo los que revierten (negativos)
+  
+  #ShinyDeepDR: Columna 'Drug.Name' 
+  df_shiny_clean <- df_shiny_LUAD %>%
+    mutate(drug_lower = tolower(trimws(Drug.name))) %>%
+    filter(Predicted.IC50..log.uM. < 0) 
+  
+  #Preparar datos con su métrica de significancia (limpiando nombres antes)
+  res_cdr <- df_cdr_clean %>% 
+    group_by(drug_lower) %>% 
+    summarise(Score_CDR = min(cmap_score), .groups = 'drop')
+  
+  res_cmap <- df_cmap_clean %>% 
+    group_by(drug_lower) %>% 
+    summarise(Score_CMap = min(NCS), .groups = 'drop')
+  
+  res_ilincs <- df_ilincs_clean %>% 
+    group_by(drug_lower) %>% 
+    summarise(Score_iLINCS = min(Concordance), pVal_iLINCS = min(pValue), .groups = 'drop')
+  
+  res_shiny <- df_shiny_clean %>% 
+    group_by(drug_lower) %>% 
+    summarise(IC50_Shiny = min(Predicted.IC50..log.uM.), .groups = 'drop')
+  
+  lista_cdr    <- unique(df_cdr_clean$drug_lower)
+  lista_cmap   <- unique(df_cmap_clean$drug_lower)
+  lista_ilincs <- unique(df_ilincs_clean$drug_lower)
+  lista_shiny  <- unique(df_shiny_clean$drug_lower)
+  
+  presencia_cdr    <- data.frame(Farmaco = lista_cdr,    CDRpipe = 1)
+  presencia_cmap   <- data.frame(Farmaco = lista_cmap,   CMap = 1)
+  presencia_ilincs <- data.frame(Farmaco = lista_ilincs, iLINCS = 1)
+  presencia_shiny  <- data.frame(Farmaco = lista_shiny,  ShinyDeepDR = 1)
+  
+  #Intersección y significancia:
+  tabla_final <- presencia_cdr %>% 
+    full_join(presencia_cmap, by = "Farmaco") %>%
+    full_join(presencia_ilincs, by = "Farmaco") %>%
+    full_join(presencia_shiny, by = "Farmaco") %>%
+    # Añadir los valores numéricos
+    left_join(res_cdr, by = c("Farmaco" = "drug_lower")) %>%
+    left_join(res_cmap, by = c("Farmaco" = "drug_lower")) %>%
+    left_join(res_ilincs, by = c("Farmaco" = "drug_lower")) %>%
+    left_join(res_shiny, by = c("Farmaco" = "drug_lower"))
+  
+  #Sustituir NAs en las columnas de presencia (del 2 al 5)
+  tabla_final[, 2:5][is.na(tabla_final[, 2:5])] <- 0
+  
+  
+  #Cálculo de totales y orden final:
+  tabla_final <- tabla_final %>%
+    mutate(Total_Metodos = CDRpipe + CMap + iLINCS + ShinyDeepDR) %>%
+    # Prioridad: 1º Más métodos, 2º Mejor reversión en iLINCS, 3º Mejor IC50 en Shiny
+    arrange(desc(Total_Metodos), Score_iLINCS, IC50_Shiny)
+  
+  #Mostrar los resultados top
+  print(head(tabla_final, 20))
+  
+  write.csv(tabla_final, archivo_salida, row.names = FALSE)
+  
+  cat("\nAnálisis finalizado. Archivo guardado como:", archivo_salida, "\n")
+  
+  return(tabla_final)
+}
+
+#Ejecutamos función de fármacos consenso para LUAD:
+farmacos_consenso_LUAD<- obtener_farmacos_consenso(
+  ruta_cdr = "data/analysis/results/Resultados reposicionamiento/CDRPipe/LUAD_1_005.csv",
+  ruta_cmap = "data/analysis/results/Resultados reposicionamiento/Clue Query (CMap)/Resultados_LUAD/Resultados_Reposicionamiento_LUAD.csv",
+  ruta_ilincs = "data/analysis/results/Resultados reposicionamiento/iLINCS/iLINCS_Connectivity_Results_LUAD.xls",
+  ruta_shiny = "data/analysis/results/Resultados reposicionamiento/ShinyDeepDR/shinyDeepDR_LUAD.csv",
+  archivo_salida = "Farmacos_Consenso_LUAD.csv"
+  )
+
+#LUSC:
+farmacos_consenso_LUSC<-obtener_farmacos_consenso(
+  ruta_cdr = "data/analysis/results/Resultados reposicionamiento/CDRPipe/LUSC_CDRPipe_1_005.csv",
+  ruta_cmap = "data/analysis/results/Resultados reposicionamiento/Clue Query (CMap)/Resultados_LUSC/Resultados_Reposicionamiento_LUSC.csv",
+  ruta_ilincs = "data/analysis/results/Resultados reposicionamiento/iLINCS/iLINCS_resultados_LUSC.xls",
+  ruta_shiny = "data/analysis/results/Resultados reposicionamiento/ShinyDeepDR/shinyDeepDR_LUSC.csv",
+  archivo_salida = "Farmacos_Consenso_LUSC.csv"
+)
