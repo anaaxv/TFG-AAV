@@ -32,6 +32,10 @@ if (!require("ggrepel", quietly = TRUE))
 if (!require("stringr", quietly = TRUE))
   install.packages("stringr")
 
+install.packages(c("UpSetR", "patchwork"))
+library(UpSetR)
+library(patchwork)
+
 
 #Cargamos las librerías que vamos a usar:
 library(TCGAbiolinks)
@@ -868,19 +872,6 @@ inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
   return(df_cdr)
 }
 
-degs_voom_luad <- read.delim("C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/FDR0.01LFC2/LUAD - Voom_DEGs_FDR_0.01_LFC_2.txt", sep = "\t", header = TRUE)
-
-input_limpio_luad<-inputs_cdrpipe(
-  df_degs = degs_voom_luad, 
-  file_name = "CDRpipe_LUAD_Voom.csv"
-)
-
-degs_voom_lusc <- read.delim("C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/FDR0.01LFC2/LUSC - Voom_DEGs_FDR_0.01_LFC_2.txt", sep = "\t", header = TRUE)
-
-input_limpio_lusc<-inputs_cdrpipe(
-  df_degs = degs_voom_lusc, 
-  file_name = "CDRpipe_LUSC_Voom.csv"
-)
 
 #Generación de inputs para iLINCS basándonos en el objeto de CDRpipe:
 inputs_ilincs <- function(df_cdr, file_name, folder = "data/analysis/results") {
@@ -904,63 +895,13 @@ inputs_ilincs <- function(df_cdr, file_name, folder = "data/analysis/results") {
   cat("Archivo para iLINCS guardado en:", ruta_salida_ilincs, "\n")
 }
 
-inputs_ilincs(
-  df_cdr = input_limpio_luad, 
-  file_name = "iLINCS_LUAD_voom.txt"
-)
 
-inputs_ilincs(
-  df_cdr = input_limpio_lusc, 
-  file_name = "iLINCS_LUSC_voom.txt"
-)
-
-#Creamos los objetos GCT para CMap (para su herramienta de Query):
-
-#LUAD:
-#Ordenamos UP por significancia (adj.P.Val de menor a mayor)
-#El p-valor más pequeño es el más significativo.
-voom_up_LUAD <- res_LUAD_voom$up_genes %>%
-  arrange(adj.P.Val) %>% 
-  head(150) %>%
-  pull(gene_name)
-
-#Ordenamos DOWN por significancia (adj.P.Val de menor a mayor)
-voom_down_LUAD <- res_LUAD_voom$down_genes %>%
-  arrange(adj.P.Val) %>% 
-  head(150) %>%
-  pull(gene_name)
-
-#Guardamos los genes en archivos .txt para subir a CLUE.io
-write.table(voom_up_LUAD, file = "data/CMap_LUAD_voom_up_top150.txt", 
-            quote = FALSE, row.names = FALSE, col.names = FALSE)
-
-write.table(voom_down_LUAD, file = "data/CMap_LUAD_voom_down_top150.txt", 
-            quote = FALSE, row.names = FALSE, col.names = FALSE)
-
-cat("Listas de inputs para CMap generadas")
-
-#LUSC:
-voom_up_LUSC <- res_LUSC_voom$up_genes %>%
-  arrange(adj.P.Val) %>% 
-  head(150) %>%
-  pull(gene_name)
-
-voom_down_LUSC <- res_LUSC_voom$down_genes %>%
-  arrange(adj.P.Val) %>% 
-  head(150) %>%
-  pull(gene_name)
-
-write.table(voom_up_LUSC, file = "data/CMap_LUSC_voom_up_top150.txt", 
-            quote = FALSE, row.names = FALSE, col.names = FALSE)
-
-write.table(voom_down_LUSC, file = "data/CMap_LUSC_voom_down_top150.txt", 
-            quote = FALSE, row.names = FALSE, col.names = FALSE)
 
 #------------
 #TRATAMIENTO DE LOS RESULTADOS DE CLUE:
 analizar_resultados_clue <- function(ruta_gct, nombre_archivo_csv) {
   
-  gct_data <- cmapR::parse.gctx(ruta_gct)
+  gct_data <- cmapR::parse_gctx(ruta_gct)
   
   #Extraemos metadatos y matriz:
   metadatos_farmacos <- as.data.frame(gct_data@rdesc)
@@ -986,19 +927,36 @@ analizar_resultados_clue <- function(ruta_gct, nombre_archivo_csv) {
   return(mis_candidatos)
 }
 
-
-#Ejecutamos la función para LUAD:
-res_LUAD_CMap <- analizar_clue_resultados(
-  ruta_gct = "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Clue Query (CMap)/query_LUAD/my_analysis.sig_queryl1k_tool.69f74eb58ed24f0014280d76/ncs.gct",
-  nombre_archivo_csv = "Resultados_Reposicionamiento_LUAD.csv"
-)
-saveRDS(mis_candidatos,"data/candidatos_LUAD.rds")
-
-res_LUSC_CMap <- analizar_clue_resultados(
-  ruta_gct = "data/analysis/results/Resultados reposicionamiento/Clue Query (CMap)/query_LUSC/my_analysis.sig_queryl1k_tool.69f7596e8ed24f0014280d7f/ncs.gct",
-  nombre_archivo_csv = "Resultados_Reposicionamiento_LUAD.csv"
-)
-saveRDS(mis_candidatos,"data/candidatos_LUSC.rds")
+#FUNCIÓN PARA TRATAMIENTO DE CLUE DE PRUEBA!!
+analizar_resultados_clue_PRO <- function(ruta_gct, nombre_archivo_csv) {
+  gct_data <- cmapR::parse_gctx(ruta_gct)
+  
+  metadatos_farmacos <- as.data.frame(gct_data@rdesc)
+  scores_ncs <- as.data.frame(gct_data@mat)
+  
+  # Si el archivo tiene muchas columnas, promediamos por fila para tener un score global
+  # O seleccionamos la columna 'summary' si existe.
+  ncs_promedio <- rowMeans(scores_ncs) 
+  
+  tabla_resultados <- data.frame(
+    Nombre_Farmaco = metadatos_farmacos$pert_iname,
+    Mecanismo_Accion = metadatos_farmacos$moa,
+    Target = metadatos_farmacos$target_name,
+    NCS = ncs_promedio 
+  )
+  
+  # Filtro de calidad: Solo fármacos con impacto real (NCS < -1.5 es un estándar común)
+  mis_candidatos <- tabla_resultados %>%
+    filter(NCS < -1.5) %>% 
+    group_by(Nombre_Farmaco) %>% 
+    summarise(Mecanismo_Accion = first(Mecanismo_Accion),
+              Target = first(Target),
+              NCS = min(NCS)) %>% # Si hay duplicados, nos quedamos con el más potente
+    arrange(NCS)
+  
+  write.csv(mis_candidatos, nombre_archivo_csv, row.names = FALSE)
+  return(mis_candidatos)
+}
 
 
 #FUNCIÓN para obtener fármacos comunes a los 4 métodos:
@@ -1090,24 +1048,6 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
   return(tabla_final)
 }
 
-#Ejecutamos función de fármacos consenso para LUAD:
-farmacos_consenso_LUAD<- obtener_farmacos_consenso(
-  ruta_cdr = "data/analysis/results/Resultados reposicionamiento/CDRPipe/LUAD_1_005.csv",
-  ruta_cmap = "data/analysis/results/Resultados reposicionamiento/Clue Query (CMap)/Resultados_LUAD/Resultados_Reposicionamiento_LUAD.csv",
-  ruta_ilincs = "data/analysis/results/Resultados reposicionamiento/iLINCS/iLINCS_Connectivity_Results_LUAD.xls",
-  ruta_shiny = "data/analysis/results/Resultados reposicionamiento/ShinyDeepDR/shinyDeepDR_LUAD.csv",
-  archivo_salida = "Farmacos_Consenso_LUAD.csv"
-  )
-
-#LUSC:
-farmacos_consenso_LUSC<-obtener_farmacos_consenso(
-  ruta_cdr = "data/analysis/results/Resultados reposicionamiento/CDRPipe/LUSC_CDRPipe_1_005.csv",
-  ruta_cmap = "data/analysis/results/Resultados reposicionamiento/Clue Query (CMap)/Resultados_LUSC/Resultados_Reposicionamiento_LUSC.csv",
-  ruta_ilincs = "data/analysis/results/Resultados reposicionamiento/iLINCS/iLINCS_resultados_LUSC.xls",
-  ruta_shiny = "data/analysis/results/Resultados reposicionamiento/ShinyDeepDR/shinyDeepDR_LUSC.csv",
-  archivo_salida = "Farmacos_Consenso_LUSC.csv"
-)
-
 ##NUEVO APPROACH: generar los inputs para CDRPipe, iLINCS y Clue
 # a partir de los genes COMUNES a EdgeR y Voom
 #a partir de los datos de expresión con FDR 0.01 y LFC 2 (los más estrictos)
@@ -1157,3 +1097,87 @@ preparar_cmap_consenso <- function(df_comun, prefix) {
 
 preparar_cmap_consenso(df_comun_luad, "LUAD")
 preparar_cmap_consenso(df_comun_lusc, "LUSC")
+
+#Tratamiento de resultados Clue:
+res_LUAD_CMap <- analizar_resultados_clue_PRO(
+  ruta_gct = "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUAD_Clue_comunes/my_analysis.sig_queryl1k_tool.6a03285d8ed9720013827997/ncs.gct",
+  nombre_archivo_csv = "CMap_Resultados_Reposicionamiento_LUAD_PRO.csv"
+)
+saveRDS(res_LUAD_CMap,"data/candidatos_LUAD_CMap_PRO.rds")
+
+res_LUSC_CMap <- analizar_resultados_clue_PRO(
+  ruta_gct = "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUSC_Clue_comunes/my_analysis.sig_queryl1k_tool.6a0330648ed24f001428125f/ncs.gct",
+  nombre_archivo_csv = "CMap_Resultados_Reposicionamiento_LUSC_PRO.csv"
+)
+saveRDS(res_LUSC_CMap,"data/candidatos_LUSC_CMap_PRO.rds")
+
+#Ejecutamos función de fármacos consenso para LUAD:
+farmacos_consenso_LUAD<- obtener_farmacos_consenso(
+  ruta_cdr = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUAD_CDRPipe_Resultados.csv",
+  ruta_cmap = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/CMap_Resultados_Reposicionamiento_LUAD_PRO.csv",
+  ruta_ilincs = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/iLINCS/LUAD/LUAD_exemplar_top100_resultados.xls",
+  ruta_shiny = "data/analysis/results/Resultados reposicionamiento/Solo Voom/ShinyDeepDR/shinyDeepDR_LUAD.csv",
+  archivo_salida = "Farmacos_Consenso_LUAD_PRO.csv"
+)
+
+#LUSC:
+farmacos_consenso_LUSC<-obtener_farmacos_consenso(
+  ruta_cdr = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUSC_CDRPipe_Resultados.csv",
+  ruta_cmap = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/CMap_Resultados_Reposicionamiento_LUSC_PRO.csv",
+  ruta_ilincs = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/iLINCS/LUSC/LUSC_exemplar_top100_resultados.xls",
+  ruta_shiny = "data/analysis/results/Resultados reposicionamiento/Solo Voom/ShinyDeepDR/shinyDeepDR_LUSC.csv",
+  archivo_salida = "Farmacos_Consenso_LUSC_PRO.csv"
+)
+
+#PRUEBAS
+#Intersección:
+
+# 1. Preparación de las listas
+listas_interseccion <- list(
+  CDRpipe     = farmacos_consenso_LUAD$Farmaco[farmacos_consenso_LUAD$CDRpipe == 1],
+  CMap        = farmacos_consenso_LUAD$Farmaco[farmacos_consenso_LUAD$CMap == 1],
+  iLINCS      = farmacos_consenso_LUAD$Farmaco[farmacos_consenso_LUAD$iLINCS == 1],
+  ShinyDeepDR = farmacos_consenso_LUAD$Farmaco[farmacos_consenso_LUAD$ShinyDeepDR == 1]
+)
+
+# 2. Visualización sin las barras de tamaño de conjunto (Set Size)
+upset(fromList(listas_interseccion), 
+      order.by = "freq", 
+      main.bar.color = "#2c3e50", 
+      sets.bar.color = "#e74c3c",
+      matrix.color = "#2c3e50",
+      text.scale = 1.2,
+      # Esta es la línea mágica que elimina el gráfico de la esquina inferior izquierda:
+      set_size.show = FALSE)
+
+#Otra prueba!ESTA ME GUSTA:
+p1 <- ggplot(farmacos_consenso_LUAD, aes(x = as.factor(Total_Metodos), y = Score_iLINCS, fill = as.factor(Total_Metodos))) +
+  geom_boxplot(alpha = 0.7, outlier.color = "red") +
+  theme_light() +
+  labs(x = "Nivel de Consenso", y = "Score iLINCS", title = "Reversión por Consenso") +
+  theme(legend.position = "none")
+
+# ShinyDeepDR distribution
+p2 <- ggplot(farmacos_consenso_LUAD, aes(x = as.factor(Total_Metodos), y = IC50_Shiny, fill = as.factor(Total_Metodos))) +
+  geom_boxplot(alpha = 0.7, outlier.color = "red") +
+  theme_light() +
+  labs(x = "Nivel de Consenso", y = "IC50 Shiny (log uM)", title = "IC50 por Consenso") +
+  theme(legend.position = "none")
+
+p1 + p2
+
+#Otra prueba: 
+top_10 <- head(farmacos_consenso_LUAD, 10)
+
+ggplot(farmacos_consenso_LUAD, aes(x = Score_iLINCS, y = IC50_Shiny)) +
+  geom_point(aes(size = Total_Metodos, color = Total_Metodos), alpha = 0.4) +
+  scale_color_viridis_c(option = "plasma") +
+  geom_text(data = top_10, aes(label = Farmaco), 
+            vjust = -1.2, size = 3.5, fontface = "bold", check_overlap = TRUE) +
+  theme_minimal() +
+  labs(title = "Identificación de Candidatos Top en LUAD",
+       subtitle = "Tamaño y color indican nivel de consenso",
+       x = "Potencia de Reversión (iLINCS)",
+       y = "IC50 Predicha (ShinyDeepDR)",
+       size = "Consenso",
+       color = "Métodos")
