@@ -1107,3 +1107,53 @@ farmacos_consenso_LUSC<-obtener_farmacos_consenso(
   ruta_shiny = "data/analysis/results/Resultados reposicionamiento/ShinyDeepDR/shinyDeepDR_LUSC.csv",
   archivo_salida = "Farmacos_Consenso_LUSC.csv"
 )
+
+##NUEVO APPROACH: generar los inputs para CDRPipe, iLINCS y Clue
+# a partir de los genes COMUNES a EdgeR y Voom
+#a partir de los datos de expresión con FDR 0.01 y LFC 2 (los más estrictos)
+
+
+#Ya habíamos sacado un vector con los comunes, tomamos los genes de ese vector como criterio de inclusión:
+df_comun_luad <- res_LUAD_voom$significant %>%
+  filter(id_cruce %in% common_deg_LUAD)
+
+df_comun_lusc <- res_LUSC_voom$significant %>%
+  filter(id_cruce %in% common_deg_LUSC)
+
+#CDRPipe LUAD y LUSC:
+input_cdr_luad_comun <- inputs_cdrpipe(
+  df_degs = df_comun_luad, 
+  file_name = "CDRpipe_LUAD_Common_Voom_edgeR.csv"
+)
+
+input_cdr_lusc_comun <- inputs_cdrpipe(
+  df_degs = df_comun_lusc, 
+  file_name = "CDRpipe_LUSC_Common_Voom_edgeR.csv"
+)
+
+#iLINCS LUAD y LUSC:
+inputs_ilincs(
+  df_cdr = input_cdr_luad_comun, 
+  file_name = "iLINCS_LUAD_Common_Voom_edgeR.txt"
+)
+
+inputs_ilincs(
+  df_cdr = input_cdr_lusc_comun, 
+  file_name = "iLINCS_LUSC_Common_Voom_edgeR.txt"
+)
+
+preparar_cmap_consenso <- function(df_comun, prefix) {
+  
+  up_genes <- df_comun %>% filter(logFC > 0) %>% arrange(adj.P.Val) %>% head(150) %>% pull(gene_name)
+  down_genes <- df_comun %>% filter(logFC < 0) %>% arrange(adj.P.Val) %>% head(150) %>% pull(gene_name)
+  
+  write.table(up_genes, file = paste0("data/CMap_", prefix, "_common_up.txt"), 
+              quote = FALSE, row.names = FALSE, col.names = FALSE)
+  write.table(down_genes, file = paste0("data/CMap_", prefix, "_common_down.txt"), 
+              quote = FALSE, row.names = FALSE, col.names = FALSE)
+  
+  cat("Archivos CMap generados para", prefix, "con", length(up_genes), "up y", length(down_genes), "down genes.\n")
+}
+
+preparar_cmap_consenso(df_comun_luad, "LUAD")
+preparar_cmap_consenso(df_comun_lusc, "LUSC")
