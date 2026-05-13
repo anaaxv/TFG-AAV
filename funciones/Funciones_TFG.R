@@ -32,12 +32,15 @@ if (!require("ggrepel", quietly = TRUE))
 if (!require("stringr", quietly = TRUE))
   install.packages("stringr")
 
-install.packages(c("UpSetR", "patchwork"))
-library(UpSetR)
-library(patchwork)
+if(!require("here", quietly = TRUE))
+  install.packages("here")
 
+if(!require("UpSetR", quietly = TRUE))
+  install.packages("UpSetR")
 
-#Cargamos las librerías que vamos a usar:
+if(!require("patchwork", quietly = TRUE))
+  install.packages("patchwork")
+
 library(TCGAbiolinks)
 library(SummarizedExperiment)
 library(DT)
@@ -50,104 +53,16 @@ library(pheatmap)
 library(ggrepel)
 library(cmapR)
 library(stringr)
+library(UpSetR)
+library(patchwork)
+library(here)
 
-#Definimos la ruta al directorio en el que se descargarán los datos y lo creamos:
-dir_gdc <- "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TCGA/GDCdata" #CAMBIAR EN EL FUTURO
-dir.create(dir_gdc, recursive = TRUE, showWarnings = FALSE) #Con recursive true nos aseguramos de que se creen las carpetas intermediarias que puedan faltar
-
-#Descargamos datos de expresión de LUAD y LUSC
-#y generamos datatables de ambos que podremos guardar para consulta:
-
-query_expr_LUAD<-GDCquery(
-  project="TCGA-LUAD",
-  data.category="Transcriptome Profiling",
-  data.type="Gene Expression Quantification",
-  workflow.type="STAR - Counts"
-)
-GDCdownload(query_expr_LUAD, directory = dir_gdc)
-expr_LUAD_raw<-GDCprepare(query_expr_LUAD, directory = dir_gdc)
-
-datatable(
-  as.data.frame(colData(expr_LUAD_raw)),
-  options = list(scrollX = TRUE, pageLength = 5),
-  rownames = FALSE
-)
-
-query_expr_LUSC<-GDCquery(
-  project="TCGA-LUSC",
-  data.category="Transcriptome Profiling",
-  data.type="Gene Expression Quantification",
-  workflow.type="STAR - Counts"
-)
-GDCdownload(query_expr_LUSC, directory = dir_gdc)
-expr_LUSC_raw<-GDCprepare(query_expr_LUSC, directory = dir_gdc)
-
-datatable(
-  as.data.frame(colData(expr_LUSC_raw)),
-  options = list(scrollX = TRUE, pageLength = 5),
-  rownames = FALSE
-)
-
-
-#Descargamos datos de mutación de LUAD y LUSC:
-
-query_mut_LUAD<-GDCquery(
-  project="TCGA-LUAD",
-  data.category="Simple Nucleotide Variation",
-  data.type="Masked Somatic Mutation",
-  workflow.type="Aliquot Ensemble Somatic Variant Merging and Masking",
-  access="open"
-)
-GDCdownload(query_mut_LUAD, directory = dir_gdc)
-mut_LUAD<-GDCprepare(query_mut_LUAD, directory = dir_gdc)
-
-query_mut_LUSC<-GDCquery(
-  project="TCGA-LUSC",
-  data.category="Simple Nucleotide Variation",
-  data.type="Masked Somatic Mutation",
-  workflow.type="Aliquot Ensemble Somatic Variant Merging and Masking",
-  access="open"
-)
-GDCdownload(query_mut_LUSC, directory = dir_gdc)
-mut_LUSC<-GDCprepare(query_mut_LUSC, directory = dir_gdc)
-
-
-#Descargamos los datos clínicos de LUAD y LUSC:
-
-query_clinical_LUAD<-GDCquery(
-  project="TCGA-LUAD",
-  data.category="Clinical",
-  data.type="Clinical Supplement",
-  data.format="BCR Biotab"
-)
-GDCdownload(query_clinical_LUAD, directory = dir_gdc)
-clinical_LUAD_BCRtab<-GDCprepare(query_clinical_LUAD, directory = dir_gdc)
-
-query_clinical_LUSC<-GDCquery(
-  project="TCGA-LUSC",
-  data.category="Clinical",
-  data.type="Clinical Supplement",
-  data.format="BCR Biotab"
-)
-GDCdownload(query_clinical_LUSC, directory = dir_gdc)
-clinical_LUSC_BCRtab<-GDCprepare(query_clinical_LUSC, directory = dir_gdc)
-
-#Guardo los objetos que he obtenido en un nuevo directorio al que llamaré "data":
-dir.create("data")
-saveRDS(expr_LUAD_raw, file="data/expr_LUAD_raw.rds")
-saveRDS(expr_LUSC_raw, file="data/expr_LUSC_raw.rds")
-saveRDS(mut_LUAD, file="data/mut_LUAD_raw.rds")
-saveRDS(mut_LUSC, file="data/mut_LUSC_raw.rds")
-saveRDS(clinical_LUAD_BCRtab, file="data/clinical_LUAD_BCRtab.rds")
-saveRDS(clinical_LUSC_BCRtab, file="data/clinical_LUSC_BCRtab.rds")
-
-#---------------------------------------
-#DATOS DE EXPRESIÓN: eliminamos pacientes duplicados
 #expr_LUAD es un SummarizedExperiment en el que las filas son los genes y las columnas las muestras
 #de RNA-seq, cada columna corresponde a un archivo .tsv
 #cuando TCGAbiolinks hace gdcprepare() pone el barcode de la muestra como nombre de la columna
-#----------------------
 
+#FUNCIÓN PARA PROCESAR DATOS DE EXPRESIÓN:
+#Eliminación de duplicados, cruce con clínicos, quedarnos solo con dos tipos de muestras...
 procesar_expr<-function(expr, 
                         clinical_patients){
   #Extraer identificador de paciente:
@@ -222,29 +137,10 @@ procesar_expr<-function(expr,
   
 }
 
-#Aplicamos la función que acabamos de crear a LUAD para obtener los perfiles de expresión definitivos:
-res_LUAD<-procesar_expr(
-  expr=expr_LUAD_raw,
-  clinical_patients=clinical_LUAD_BCRtab$clinical_patient_luad$bcr_patient_barcode
-)
+#-----------------
+#Funciones de análisis:
 
-expr_LUAD_def<-res_LUAD$expr_def
-common_patients_LUAD<-res_LUAD$common_patients
-
-saveRDS(expr_LUAD_def,"data/expr_LUAD_def.rds")
-saveRDS(common_patients_LUAD, "data/common_patients_LUAD.rds")
-
-#Hacemos lo mismo para LUSC:
-res_LUSC<-procesar_expr(
-  expr=expr_LUSC_raw,
-  clinical_patients=clinical_LUSC_BCRtab$clinical_patient_lusc$bcr_patient_barcode
-)
-
-expr_LUSC_def<-res_LUSC$expr_def
-common_patients_LUSC<-res_LUSC$common_patients
-
-saveRDS(expr_LUSC_def,"data/expr_LUSC_def.rds")
-saveRDS(common_patients_LUSC, "data/common_patients_LUSC.rds")
+#EdgeR:
 
 preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Experiment
                            group_variable="sample_type", #Nombre de la columna en colData
@@ -462,14 +358,17 @@ analysis_edgeR<-function(dgl,
   }
   
   #Creamos carpeta de resultados:
-  results_folder <- file.path(base_folder, "analysis", "results")
+  #Para cada uso de la función se crea una carpeta nueva llamada como su combinación de umbrales:
+  threshold_dir<- paste0("FDR_", fdr_threshold, "_LFC_", lfc_threshold)
+  
+  results_folder <- here(base_folder, "analysis", "results", threshold_dir)
   if(!dir.exists(results_folder)){
     dir.create(results_folder, recursive=TRUE)
   }
   
   write.table(significant,
               file=file.path(results_folder,
-                             paste0(plot_prefix,"_DEGs_FDR_",fdr_threshold,".txt")),
+                             paste0(plot_prefix,"_DEGs.txt")),
               quote=FALSE,
               sep="\t",
               row.names=FALSE)
@@ -500,10 +399,11 @@ analysis_edgeR<-function(dgl,
 complete_edgeR_analysis<-function(expr_data,
                                   group_variable="sample_type",
                                   reference_level="Normal",
-                                  lfc_threshold=2, 
-                                  fdr_threshold=0.01, 
+                                  lfc_threshold=1, 
+                                  fdr_threshold=0.05, 
                                   preprocess_plots=list(boxplot=TRUE, mds=TRUE, pca=TRUE), 
                                   analysis_plots=list(bcv=TRUE, ma=TRUE, volcano=TRUE, hm=TRUE),
+                                  base_folder="data",
                                   plot_prefix="Edge R"){
   #Preprocesamiento:
   pre<-preprocess_edgeR(
@@ -521,6 +421,7 @@ complete_edgeR_analysis<-function(expr_data,
     lfc_threshold=lfc_threshold,
     fdr_threshold=fdr_threshold,
     plots=analysis_plots,
+    base_folder=base_folder,
     plot_prefix = plot_prefix
   )
   return(results)
@@ -541,7 +442,7 @@ analysis_voom<-function(expr_data,
   
   #GENE_TYPE:
   info_genes <- info_genes_raw[, c("id_cruce", "gene_name", "gene_type")]
-
+  
   counts<-assay(expr_data)
   counts<-as.matrix(counts) #aseguramos que sea matriz
   mode(counts)<-"numeric" #forzamos a numerico
@@ -661,14 +562,15 @@ analysis_voom<-function(expr_data,
     )
   }
   
-  results_folder <- file.path(base_folder, "analysis", "results") 
+  threshold_dir<- paste0("FDR_", fdr_threshold, "_LFC_", lfc_threshold)
+  results_folder <- file.path(base_folder, "analysis", "results", threshold_dir) 
   if(!dir.exists(results_folder)){
     dir.create(results_folder, recursive=TRUE)
   }
   
   #Guardamos DEGs significativos:
   write.table(significant, 
-              file=file.path(results_folder, paste0(plot_prefix, "_DEGs_FDR_",fdr_threshold,"_LFC_",lfc_threshold,".txt")),
+              file=file.path(results_folder, paste0(plot_prefix, "_DEGs_.txt")),
               quote=FALSE, sep="\t", row.names=FALSE) 
   
   # Guardamos tabla completa:
@@ -692,63 +594,16 @@ analysis_voom<-function(expr_data,
   ))
 }
 
-#Análisis EdgeR LUAD:
-res_LUAD_edgeR<-complete_edgeR_analysis(expr_LUAD_def,
-                                        lfc_threshold = 2,
-                                        fdr_threshold = 0.01,
-                                        preprocess_plots = list(boxplot=FALSE, mds=FALSE, pca=FALSE),
-                                        analysis_plots = list(bcv=FALSE, ma=FALSE, volcano=FALSE, hm=FALSE),
-                                        plot_prefix="LUAD - Edge R")
-saveRDS(res_LUAD_edgeR,"data/res_LUAD_edgeR_pcg.rds")
+#----------------------------------
 
-#Análisis voom LUAD:
-res_LUAD_voom<-analysis_voom(expr_LUAD_def,
-                             lfc_threshold = 2,
-                             fdr_threshold = 0.01,
-                             plots = list(volcano=FALSE, hm=FALSE),
-                             plot_prefix="LUAD - Voom")
-saveRDS(res_LUAD_voom,"data/res_LUAD_voom_pcg.rds")
+#Funciones para generar los inputs de reposicionamiento:
 
-common_deg_LUAD <- intersect(
-  res_LUAD_edgeR$significant$id_cruce,
-  res_LUAD_voom$significant$id_cruce
-)
-saveRDS(common_deg_LUAD,"data/common_deg_LUAD.rds")
-
-#Análisis EdgeR LUSC:
-res_LUSC_edgeR<-complete_edgeR_analysis(expr_LUSC_def, 
-                                        lfc_threshold = 2,
-                                        fdr_threshold = 0.01,
-                                        preprocess_plots = list(boxplot=FALSE, mds=FALSE, pca=FALSE),
-                                        analysis_plots = list(bcv=FALSE, ma=FALSE, volcano=FALSE, hm=FALSE),
-                                        plot_prefix="LUSC - Edge R")
-saveRDS(res_LUSC_edgeR,"data/res_LUSC_edgeR_pcg.rds")
-
-#Análisis Voom LUSC:
-res_LUSC_voom<-analysis_voom(expr_LUSC_def, 
-                             lfc_threshold = 2,
-                             fdr_threshold = 0.01,
-                             plots = list(volcano=FALSE, hm=FALSE),
-                             plot_prefix="LUSC - Voom")
-saveRDS(res_LUSC_voom,"data/res_LUSC_voom_pcg.rds")
-
-common_deg_LUSC <- intersect(
-  res_LUSC_edgeR$significant$id_cruce,
-  res_LUSC_voom$significant$id_cruce
-)
-saveRDS(common_deg_LUSC,"data/common_deg_LUSC.rds")
-
-common_lung_deg<-intersect(common_deg_LUAD, common_deg_LUSC)
-saveRDS(common_lung_deg,"data/common_lung_deg.rds")
-
-
-#Preparación de los Inputs para las herramientas de reposicionamiento de fármacos:
 #Función que genera los inputs para ShinyDeepDR:
 #Para shinydeepDR tienes que hacer como si solo fuera una muestra
 #Serviría muy bien para medicina personalizada
 #Extrae la mediana de los TPMs de las muestras tumorales:
 
-inputs_shinyDeepDR<-function(expr_data, file_name, folder="data/analysis/results") {
+inputs_shinyDeepDR<-function(expr_data, file_name, folder=here("data","analysis","inputs_repo", "ShinyDeepDR")) {
   if(!dir.exists(folder)){
     dir.create(folder, recursive=TRUE)
   }  
@@ -785,50 +640,14 @@ inputs_shinyDeepDR<-function(expr_data, file_name, folder="data/analysis/results
     as.data.frame()
   
   #Guardamos:
-  ruta_salida <- file.path(folder, file_name)
+  ruta_salida <- file.path(folder, paste0(file_name, ".txt"))
   write.table(df_shiny, file = ruta_salida, sep = "\t", quote = FALSE, row.names = FALSE)
   
   cat("Archivo shinyDeepDR guardado en:", ruta_salida, "\n")
   cat("Tumores promediados:", sum(es_tumor), "\n")
-  
 }
 
-inputs_shinyDeepDR(
-  expr_data = expr_LUAD_def,
-  file_name="shinyDeepDR_LUAD.txt"
-)
-
-inputs_shinyDeepDR(
-  expr_data = expr_LUSC_def,
-  file_name="shinyDeepDR_LUSC.txt"
-)
-
-#Inputs para ShinyDeepDR de MUTACIONES:
-maf_shinyDeepDR_LUAD <- mut_LUAD_raw %>%
-  dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode) %>%
-  mutate(Tumor_Sample_Barcode = "LUAD_Global") %>% # Forzamos una única muestra
-  distinct() # Eliminamos duplicados si el mismo gen muta igual en varios pacientes
-
-# Guardamos el MAF "unificado":
-write.table(maf_shinyDeepDR_LUAD, 
-            file = "data/LUAD_mutations_ShinyDeepDR.maf", 
-            sep = "\t", 
-            quote = FALSE, 
-            row.names = FALSE)
-
-maf_shinyDeepDR_LUSC <- mut_LUSC_raw %>%
-  dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode) %>%
-  mutate(Tumor_Sample_Barcode = "LUSC_Global") %>% # Forzamos una única muestra
-  distinct() # Eliminamos duplicados si el mismo gen muta igual en varios pacientes
-
-write.table(maf_shinyDeepDR_LUSC, 
-            file = "data/LUSC_mutations_ShinyDeepDR.maf", 
-            sep = "\t", 
-            quote = FALSE, 
-            row.names = FALSE)
-
-#Preparamos los inputs para CDRPipe:
-inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
+inputs_cdrpipe<-function(df_degs, file_name, folder=here("data","analysis","inputs_repo", "CDRPipe")){
   
   #creamos directorio si no existe:
   if(!dir.exists(folder)){
@@ -863,7 +682,7 @@ inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
     as.data.frame()
   
   #Guardamos en formato CSV:
-  ruta_salida <- file.path(folder, file_name)
+  ruta_salida <- file.path(folder, paste0(file_name, ".csv"))
   write.csv(df_cdr, file = ruta_salida, row.names = FALSE, quote = FALSE)
   
   cat("Archivo para CDRpipe guardado en:", ruta_salida, "\n")
@@ -874,14 +693,14 @@ inputs_cdrpipe<-function(df_degs, file_name, folder="data/analysis/results"){
 
 
 #Generación de inputs para iLINCS basándonos en el objeto de CDRpipe:
-inputs_ilincs <- function(df_cdr, file_name, folder = "data/analysis/results") {
+inputs_ilincs <- function(df_cdr, file_name, folder = here("data","analysis","inputs_repo", "iLINCS")) {
   
   #Creamos directorio si no existe:
   if(!dir.exists(folder)){
     dir.create(folder, recursive = TRUE)
   }
-
-  ruta_salida_ilincs <- file.path(folder, file_name)
+  
+  ruta_salida_ilincs <- file.path(folder, paste0(file_name, ".txt"))
   
   #Guardamos en formato TXT delimitado por tabuladores (\t)
   write.table(
@@ -896,10 +715,32 @@ inputs_ilincs <- function(df_cdr, file_name, folder = "data/analysis/results") {
 }
 
 
+#Clue Query (CMap):
+inputs_clue <- function(df_comun, prefix, folder= here("data","analysis","inputs_repo", "Clue")) {
+  
+  if(!dir.exists(folder)){
+    dir.create(folder, recursive = TRUE)
+  }
+  
+  up_genes <- df_comun %>% filter(logFC > 0) %>% arrange(adj.P.Val) %>% head(150) %>% pull(gene_name)
+  down_genes <- df_comun %>% filter(logFC < 0) %>% arrange(adj.P.Val) %>% head(150) %>% pull(gene_name)
+  
+  write.table(up_genes, file = file.path(folder, paste0(file_name, "_up.txt")), 
+              quote = FALSE, row.names = FALSE, col.names = FALSE)
+  write.table(down_genes, file = file.path(folder, paste0(file_name, "_down.txt")), 
+              quote = FALSE, row.names = FALSE, col.names = FALSE)
+  
+  cat("Archivos CMap generados para", prefix, "con", length(up_genes), "up y", length(down_genes), "down genes.\n")
+}
 
-#------------
-#TRATAMIENTO DE LOS RESULTADOS DE CLUE:
-analizar_resultados_clue_PRO <- function(ruta_gct, nombre_archivo_csv) {
+#-----------------
+##TRATAMIENTO DE LOS RESULTADOS DE CLUE:
+analizar_resultados_clue <- function(ruta_gct, nombre_archivo, folder= here("data","analysis","results","resultados_repo", "CMap")) {
+  
+  if(!dir.exists(folder)){
+    dir.create(folder, recursive = TRUE)
+  }
+  
   gct_data <- cmapR::parse_gctx(ruta_gct)
   
   metadatos_farmacos <- as.data.frame(gct_data@rdesc)
@@ -925,14 +766,19 @@ analizar_resultados_clue_PRO <- function(ruta_gct, nombre_archivo_csv) {
               NCS = min(NCS)) %>% # Si hay duplicados, nos quedamos con el más potente
     arrange(NCS)
   
-  write.csv(mis_candidatos, nombre_archivo_csv, row.names = FALSE)
+  ruta_final<-file.path(folder, paste0(nombre_archivo, ".csv"))
+  write.csv(mis_candidatos, ruta_final, row.names = FALSE)
   return(mis_candidatos)
 }
 
+#FUNCIÓN PARA OBTENER FÁRMACOS CONSENSO:
 
-#FUNCIÓN para obtener fármacos comunes a los 4 métodos:
-
-obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shiny, archivo_salida) {
+obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shiny, archivo_salida,
+                                      folder=here("data","analysis","results","resultados_repo", "Consenso")) {
+  
+  if(!dir.exists(folder)){
+    dir.create(folder, recursive = TRUE)
+  }
   
   #Carga de resultados de reposicionamiento:
   df_cdr_LUAD <- read.csv(ruta_cdr)
@@ -1009,7 +855,8 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
     # Prioridad: 1º Más métodos, 2º Mejor reversión en iLINCS, 3º Mejor IC50 en Shiny
     arrange(desc(Total_Metodos), Score_iLINCS, IC50_Shiny)
   
-  write.csv(tabla_final, archivo_salida, row.names = FALSE)
+  ruta_final<-file.path(folder, paste0(nombre_archivo, ".csv"))
+  write.csv(tabla_final, ruta_final, row.names = FALSE)
   
   nombre_rds <- paste0("data/", gsub(".csv", ".rds", basename(archivo_salida)))
   saveRDS(tabla_final, file = nombre_rds)
@@ -1053,88 +900,3 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
   
   return(tabla_final)
 }
-
-##NUEVO APPROACH: generar los inputs para CDRPipe, iLINCS y Clue
-# a partir de los genes COMUNES a EdgeR y Voom
-#a partir de los datos de expresión con FDR 0.01 y LFC 2 (los más estrictos)
-
-
-#Ya habíamos sacado un vector con los comunes, tomamos los genes de ese vector como criterio de inclusión:
-df_comun_luad <- res_LUAD_voom$significant %>%
-  filter(id_cruce %in% common_deg_LUAD)
-
-df_comun_lusc <- res_LUSC_voom$significant %>%
-  filter(id_cruce %in% common_deg_LUSC)
-
-#CDRPipe LUAD y LUSC:
-input_cdr_luad_comun <- inputs_cdrpipe(
-  df_degs = df_comun_luad, 
-  file_name = "CDRpipe_LUAD_Common_Voom_edgeR.csv"
-)
-
-input_cdr_lusc_comun <- inputs_cdrpipe(
-  df_degs = df_comun_lusc, 
-  file_name = "CDRpipe_LUSC_Common_Voom_edgeR.csv"
-)
-
-#iLINCS LUAD y LUSC:
-inputs_ilincs(
-  df_cdr = input_cdr_luad_comun, 
-  file_name = "iLINCS_LUAD_Common_Voom_edgeR.txt"
-)
-
-inputs_ilincs(
-  df_cdr = input_cdr_lusc_comun, 
-  file_name = "iLINCS_LUSC_Common_Voom_edgeR.txt"
-)
-
-preparar_cmap_consenso <- function(df_comun, prefix) {
-  
-  up_genes <- df_comun %>% filter(logFC > 0) %>% arrange(adj.P.Val) %>% head(150) %>% pull(gene_name)
-  down_genes <- df_comun %>% filter(logFC < 0) %>% arrange(adj.P.Val) %>% head(150) %>% pull(gene_name)
-  
-  write.table(up_genes, file = paste0("data/CMap_", prefix, "_common_up.txt"), 
-              quote = FALSE, row.names = FALSE, col.names = FALSE)
-  write.table(down_genes, file = paste0("data/CMap_", prefix, "_common_down.txt"), 
-              quote = FALSE, row.names = FALSE, col.names = FALSE)
-  
-  cat("Archivos CMap generados para", prefix, "con", length(up_genes), "up y", length(down_genes), "down genes.\n")
-}
-
-preparar_cmap_consenso(df_comun_luad, "LUAD")
-preparar_cmap_consenso(df_comun_lusc, "LUSC")
-
-#Tratamiento de resultados Clue:
-res_LUAD_CMap <- analizar_resultados_clue_PRO(
-  ruta_gct = "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUAD_Clue_comunes/my_analysis.sig_queryl1k_tool.6a03285d8ed9720013827997/ncs.gct",
-  nombre_archivo_csv = "CMap_Resultados_Reposicionamiento_LUAD_PRO.csv"
-)
-saveRDS(res_LUAD_CMap,"data/candidatos_LUAD_CMap_PRO.rds")
-
-res_LUSC_CMap <- analizar_resultados_clue_PRO(
-  ruta_gct = "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUSC_Clue_comunes/my_analysis.sig_queryl1k_tool.6a0330648ed24f001428125f/ncs.gct",
-  nombre_archivo_csv = "CMap_Resultados_Reposicionamiento_LUSC_PRO.csv"
-)
-saveRDS(res_LUSC_CMap,"data/candidatos_LUSC_CMap_PRO.rds")
-
-#Ejecutamos función de fármacos consenso para LUAD:
-farmacos_consenso_LUAD<- obtener_farmacos_consenso(
-  ruta_cdr = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUAD_CDRPipe_Resultados.csv",
-  ruta_cmap = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/CMap_Resultados_Reposicionamiento_LUAD_PRO.csv",
-  ruta_ilincs = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/iLINCS/LUAD/LUAD_exemplar_top100_resultados.xls",
-  ruta_shiny = "data/analysis/results/Resultados reposicionamiento/Solo Voom/ShinyDeepDR/shinyDeepDR_LUAD.csv",
-  archivo_salida = "Farmacos_Consenso_LUAD_PRO.csv"
-)
-
-#LUSC:
-farmacos_consenso_LUSC<-obtener_farmacos_consenso(
-  ruta_cdr = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUSC_CDRPipe_Resultados.csv",
-  ruta_cmap = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/CMap_Resultados_Reposicionamiento_LUSC_PRO.csv",
-  ruta_ilincs = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/iLINCS/LUSC/LUSC_exemplar_top100_resultados.xls",
-  ruta_shiny = "data/analysis/results/Resultados reposicionamiento/Solo Voom/ShinyDeepDR/shinyDeepDR_LUSC.csv",
-  archivo_salida = "Farmacos_Consenso_LUSC_PRO.csv"
-)
-
-
-
-
