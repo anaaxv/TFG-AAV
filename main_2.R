@@ -6,7 +6,7 @@ library(here)
 source(here("funciones", "Funciones_TFG.R"))
 
 #----------------------------------------------
-#BLOQUE 1: DESCARGA DE DATOS TRANSCRIPTÓMICOS, CLÍNICOS Y DE MUTACIONES:
+#BLOQUE 1: DESCARGA DE DATOS TRANSCRIPTÓMICOS, CLÍNICOS Y DE MUTACIONES: 
 
 #Definimos la ruta al directorio en el que se descargarán los datos y lo creamos:
 dir_gdc <- here("TCGA","GDCdata") 
@@ -100,6 +100,7 @@ saveRDS(mut_LUSC, file="data/mut_LUSC_raw.rds")
 saveRDS(clinical_LUAD_BCRtab, file="data/clinical_LUAD_BCRtab.rds")
 saveRDS(clinical_LUSC_BCRtab, file="data/clinical_LUSC_BCRtab.rds")
 
+
 #---------------------------------------
 #BLOQUE 2: PROCESAMIENTO DE DATOS DE EXPRESIÓN
 
@@ -129,8 +130,9 @@ saveRDS(common_patients_LUSC, "data/common_patients_LUSC.rds")
 
 #--------------------------------------------
 #BLOQUE 3: ANÁLISIS DE EXPRESIÓN (EdgeR y Voom)
+#Este bloque tarda bastante en ejecutarse
+#A mí me tarda aproximadamente unas 2h, sacando todos los gráficos asociados
 
-#REVISAR!!!
 #Definimos los parámetros de prueba
 cancers <- c("LUAD", "LUSC")
 fdr_values <- c(0.01, 0.05)
@@ -204,6 +206,8 @@ for (key in names(common_deg_lung)) {
   saveRDS(common_lung, paste0("data/common_lung_deg_", key, ".rds"))
 }
 
+
+
 #---------------------------
 #BLOQUE 4: GENERAMOS LOS INPUTS PARA LAS HERRAMIENTAS DE REPOSICIONAMIENTO
 
@@ -262,12 +266,12 @@ input_cdr_lusc <- inputs_cdrpipe(
 
 #iLINCS:
 inputs_ilincs(
-  df_cdr = input_cdr_luad_comun, 
+  df_cdr = input_cdr_luad, 
   file_name = "input_iLINCS_LUAD"
 )
 
 inputs_ilincs(
-  df_cdr = input_cdr_lusc_comun, 
+  df_cdr = input_cdr_lusc, 
   file_name = "input_iLINCS_LUSC"
 )
 
@@ -275,22 +279,24 @@ inputs_ilincs(
 inputs_clue(df_comun_luad, "LUAD")
 inputs_clue(df_comun_lusc, "LUSC")
 
+
 #-------------------------------------
-#BLOQUE 5: TRATAMIENTO DE RESULTADOS DE CLUE QUERY
+#BLOQUE 5: TRATAMIENTO DE RESULTADOS DE CLUE QUERY 
 res_LUAD_CMap <- analizar_resultados_clue(
   ruta_gct = "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUAD_Clue_comunes/my_analysis.sig_queryl1k_tool.6a03285d8ed9720013827997/ncs.gct",
-  nombre_archivo_csv = "CMap_Resultados_LUAD"
+  nombre_archivo = "CMap_Resultados_LUAD"
 )
-saveRDS(res_LUAD_CMap,"data/candidatos_LUAD_CMap_PRO.rds") #CAMBIARRR
+saveRDS(res_LUAD_CMap,here("data", "candidatos_LUAD_CMap.rds")) 
 
 res_LUSC_CMap <- analizar_resultados_clue(
   ruta_gct = "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUSC_Clue_comunes/my_analysis.sig_queryl1k_tool.6a0330648ed24f001428125f/ncs.gct",
-  nombre_archivo_csv = "CMap_Resultados_LUSC"
+  nombre_archivo = "CMap_Resultados_LUSC"
 )
-saveRDS(res_LUSC_CMap,"data/candidatos_LUSC_CMap_PRO.rds") #CAMBIARR
+saveRDS(res_LUAD_CMap,here("data", "candidatos_LUSC_CMap.rds")) 
+
 
 #----------------------------------------------
-#BLOQUE 6: OBTENER FÁRMACOS CONSENSO
+#BLOQUE 6: OBTENER FÁRMACOS CONSENSO 
 
 #Ejecutamos función de fármacos consenso para LUAD:
 farmacos_consenso_LUAD<- obtener_farmacos_consenso(

@@ -725,9 +725,9 @@ inputs_clue <- function(df_comun, prefix, folder= here("data","analysis","inputs
   up_genes <- df_comun %>% filter(logFC > 0) %>% arrange(adj.P.Val) %>% head(150) %>% pull(gene_name)
   down_genes <- df_comun %>% filter(logFC < 0) %>% arrange(adj.P.Val) %>% head(150) %>% pull(gene_name)
   
-  write.table(up_genes, file = file.path(folder, paste0(file_name, "_up.txt")), 
+  write.table(up_genes, file = file.path(folder, paste0(prefix, "_up.txt")), 
               quote = FALSE, row.names = FALSE, col.names = FALSE)
-  write.table(down_genes, file = file.path(folder, paste0(file_name, "_down.txt")), 
+  write.table(down_genes, file = file.path(folder, paste0(prefix, "_down.txt")), 
               quote = FALSE, row.names = FALSE, col.names = FALSE)
   
   cat("Archivos CMap generados para", prefix, "con", length(up_genes), "up y", length(down_genes), "down genes.\n")
@@ -855,11 +855,11 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
     # Prioridad: 1º Más métodos, 2º Mejor reversión en iLINCS, 3º Mejor IC50 en Shiny
     arrange(desc(Total_Metodos), Score_iLINCS, IC50_Shiny)
   
-  ruta_final<-file.path(folder, paste0(nombre_archivo, ".csv"))
+  ruta_final<-file.path(folder, paste0(archivo_salida, ".csv"))
   write.csv(tabla_final, ruta_final, row.names = FALSE)
   
-  nombre_rds <- paste0("data/", gsub(".csv", ".rds", basename(archivo_salida)))
-  saveRDS(tabla_final, file = nombre_rds)
+  nombre_rds <- paste0("data/", archivo_salida, ".rds" )
+  saveRDS(tabla_final, nombre_rds)
   
   #GRÁFICOS:
   
