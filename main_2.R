@@ -100,7 +100,13 @@ saveRDS(mut_LUSC, file="data/mut_LUSC_raw.rds")
 saveRDS(clinical_LUAD_BCRtab, file="data/clinical_LUAD_BCRtab.rds")
 saveRDS(clinical_LUSC_BCRtab, file="data/clinical_LUSC_BCRtab.rds")
 
-
+#Dejamos el espacio de trabajo lo más limpio posible
+#De esta manera trabajaremos solo con lo imprescindible en cada momento, para ahorrar RAM:
+rm(query_expr_LUAD, query_expr_LUSC, 
+   query_mut_LUAD, query_mut_LUSC,
+   query_clinical_LUAD, query_clinical_LUSC,
+   mut_LUAD, mut_LUSC)
+gc()
 #---------------------------------------
 #BLOQUE 2: PROCESAMIENTO DE DATOS DE EXPRESIÓN
 
@@ -116,6 +122,9 @@ common_patients_LUAD<-res_LUAD$common_patients
 saveRDS(expr_LUAD_def,"data/expr_LUAD_def.rds")
 saveRDS(common_patients_LUAD, "data/common_patients_LUAD.rds")
 
+rm(expr_LUAD_raw, res_LUAD, common_patients_LUAD)
+gc()
+
 #Hacemos lo mismo para LUSC:
 res_LUSC<-procesar_expr(
   expr=expr_LUSC_raw,
@@ -128,8 +137,11 @@ common_patients_LUSC<-res_LUSC$common_patients
 saveRDS(expr_LUSC_def,"data/expr_LUSC_def.rds")
 saveRDS(common_patients_LUSC, "data/common_patients_LUSC.rds")
 
+rm(expr_LUSC_raw,res_LUSC,common_patients_LUSC)
+gc()
+
 #--------------------------------------------
-#BLOQUE 3: ANÁLISIS DE EXPRESIÓN (EdgeR y Voom)
+#BLOQUE 3: ANÁLISIS DE EXPRESIÓN (EdgeR y Voom) ((INCLUIR RM Y GC))
 #Este bloque tarda bastante en ejecutarse
 #A mí me tarda aproximadamente unas 2h, sacando todos los gráficos asociados
 
@@ -154,8 +166,7 @@ for (i in 1:nrow(params)) {
   
   cat("\n--- Procesando:", can, "| FDR:", curr_fdr, "| LFC:", curr_lfc, "---\n")
   
-  # Seleccionar el objeto de expresión correspondiente dinámicamente
-  # Asume que tienes expr_LUAD_def y expr_LUSC_def cargados
+  # Seleccionar el objeto de expresión correspondiente:
   expr_data <- get(paste0("expr_", can, "_def"))
   
   # A.Análisis EdgeR
@@ -192,6 +203,9 @@ for (i in 1:nrow(params)) {
   common_deg_lung[[threshold_key]][[can]] <- common_can
 }
 
+rm(res_edgeR, res_voom, expr_data, common_can)
+gc()
+
 #Calculamos la intersección FINAL (LUAD vs LUSC) para cada umbral
 cat("\n--- Calculando Intersecciones Finales (Common Lung) ---\n")
 
@@ -206,6 +220,8 @@ for (key in names(common_deg_lung)) {
   saveRDS(common_lung, paste0("data/common_lung_deg_", key, ".rds"))
 }
 
+rm(cancers, fdr_values, lfc_values, params, common_deg_lung, common_lung)
+gc()
 
 
 #---------------------------
@@ -222,7 +238,12 @@ inputs_shinyDeepDR(
   file_name="input_ShinyDeepDR_LUSC"
 )
 
+rm(expr_LUAD_def,expr_LUSC_def)
+gc()
+
 #ShinyDeepDR, mutaciones:
+mut_LUAD_raw<-readRDS("data/mut_LUAD_raw.rds")
+
 maf_shinyDeepDR_LUAD <- mut_LUAD_raw %>%
   dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode) %>%
   mutate(Tumor_Sample_Barcode = "LUAD_Global") %>% # Forzamos una única muestra
@@ -235,6 +256,11 @@ write.table(maf_shinyDeepDR_LUAD,
             quote = FALSE, 
             row.names = FALSE)
 
+rm(mut_LUAD_raw)
+gc()
+
+mut_LUSC_raw<-readRDS("data/mut_LUSC_raw.rds")
+
 maf_shinyDeepDR_LUSC <- mut_LUSC_raw %>%
   dplyr::select(Hugo_Symbol, Variant_Classification, Tumor_Sample_Barcode) %>%
   mutate(Tumor_Sample_Barcode = "LUSC_Global") %>% # Forzamos una única muestra
@@ -246,7 +272,15 @@ write.table(maf_shinyDeepDR_LUSC,
             quote = FALSE, 
             row.names = FALSE)
 
+rm(mut_LUSC_raw)
+gc()
+
 #CDRPipe:
+
+res_LUAD_voom<- readRDS("data/res_voom_LUAD_FDR0.01_LFC2.rds")
+common_deg_LUAD<-readRDS("data/common_deg_LUAD_FDR0.01_LFC2.rds")
+res_LUSC_voom<- readRDS("data/res_voom_LUSC_FDR0.01_LFC2.rds")
+common_deg_LUSC<-readRDS("data/common_deg_LUSC_FDR0.01_LFC2.rds")
 
 df_comun_luad <- res_LUAD_voom$significant %>%
   filter(id_cruce %in% common_deg_LUAD)
@@ -263,6 +297,9 @@ input_cdr_lusc <- inputs_cdrpipe(
   df_degs = df_comun_lusc, 
   file_name = "input_CDRpipe_LUSC"
 )
+
+rm(res_LUAD_voom, res_LUSC_voom, common_deg_LUAD, common_deg_LUSC)
+gc()
 
 #iLINCS:
 inputs_ilincs(
@@ -283,13 +320,13 @@ inputs_clue(df_comun_lusc, "LUSC")
 #-------------------------------------
 #BLOQUE 5: TRATAMIENTO DE RESULTADOS DE CLUE QUERY 
 res_LUAD_CMap <- analizar_resultados_clue(
-  ruta_gct = "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUAD_Clue_comunes/my_analysis.sig_queryl1k_tool.6a03285d8ed9720013827997/ncs.gct",
+  ruta_gct = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUAD_Clue_comunes/my_analysis.sig_queryl1k_tool.6a03285d8ed9720013827997/ncs.gct",
   nombre_archivo = "CMap_Resultados_LUAD"
 )
 saveRDS(res_LUAD_CMap,here("data", "candidatos_LUAD_CMap.rds")) 
 
 res_LUSC_CMap <- analizar_resultados_clue(
-  ruta_gct = "C:/Users/anaal/OneDrive - UNIVERSIDAD DE GRANADA/TFG/TFG-AAV/data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUSC_Clue_comunes/my_analysis.sig_queryl1k_tool.6a0330648ed24f001428125f/ncs.gct",
+  ruta_gct = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUSC_Clue_comunes/my_analysis.sig_queryl1k_tool.6a0330648ed24f001428125f/ncs.gct",
   nombre_archivo = "CMap_Resultados_LUSC"
 )
 saveRDS(res_LUAD_CMap,here("data", "candidatos_LUSC_CMap.rds")) 
