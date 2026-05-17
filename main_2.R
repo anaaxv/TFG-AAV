@@ -316,17 +316,16 @@ inputs_ilincs(
 inputs_clue(df_comun_luad, "LUAD")
 inputs_clue(df_comun_lusc, "LUSC")
 
-
 #-------------------------------------
 #BLOQUE 5: TRATAMIENTO DE RESULTADOS DE CLUE QUERY 
 res_LUAD_CMap <- analizar_resultados_clue(
-  ruta_gct = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUAD_Clue_comunes/my_analysis.sig_queryl1k_tool.6a03285d8ed9720013827997/ncs.gct",
+  ruta_gct = "data/analysis/results/resultados_repo/LUAD_Clue_comunes/my_analysis.sig_queryl1k_tool.6a03285d8ed9720013827997/ncs.gct",
   nombre_archivo = "CMap_Resultados_LUAD"
 )
 saveRDS(res_LUAD_CMap,here("data", "candidatos_LUAD_CMap.rds")) 
 
 res_LUSC_CMap <- analizar_resultados_clue(
-  ruta_gct = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUSC_Clue_comunes/my_analysis.sig_queryl1k_tool.6a0330648ed24f001428125f/ncs.gct",
+  ruta_gct = "data/analysis/results/resultados_repo/LUSC_Clue_comunes/my_analysis.sig_queryl1k_tool.6a0330648ed24f001428125f/ncs.gct",
   nombre_archivo = "CMap_Resultados_LUSC"
 )
 saveRDS(res_LUAD_CMap,here("data", "candidatos_LUSC_CMap.rds")) 
@@ -337,18 +336,18 @@ saveRDS(res_LUAD_CMap,here("data", "candidatos_LUSC_CMap.rds"))
 
 #Ejecutamos función de fármacos consenso para LUAD:
 farmacos_consenso_LUAD<- obtener_farmacos_consenso(
-  ruta_cdr = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUAD_CDRPipe_Resultados.csv",
-  ruta_cmap = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/CMap_Resultados_Reposicionamiento_LUAD_PRO.csv",
-  ruta_ilincs = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/iLINCS/LUAD/LUAD_exemplar_top100_resultados.xls",
-  ruta_shiny = "data/analysis/results/Resultados reposicionamiento/Solo Voom/ShinyDeepDR/shinyDeepDR_LUAD.csv",
+  ruta_cdr = "data/analysis/results/resultados_repo/LUAD_CDRPipe_Resultados.csv",
+  ruta_cmap = "data/analysis/results/resultados_repo/CMap/CMap_Resultados_LUAD.csv",
+  ruta_ilincs = "data/analysis/results/resultados_repo/iLINCS/LUAD/LUAD_exemplar_top100_resultados.xls",
+  ruta_shiny = "data/analysis/results/resultados_repo/ShinyDeepDR/shinyDeepDR_LUAD.csv",
   archivo_salida = "Farmacos_Consenso_LUAD"
 )
 
 #LUSC:
 farmacos_consenso_LUSC<-obtener_farmacos_consenso(
-  ruta_cdr = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUSC_CDRPipe_Resultados.csv",
-  ruta_cmap = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/CMap_Resultados_Reposicionamiento_LUSC_PRO.csv",
-  ruta_ilincs = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/iLINCS/LUSC/LUSC_exemplar_top100_resultados.xls",
-  ruta_shiny = "data/analysis/results/Resultados reposicionamiento/Solo Voom/ShinyDeepDR/shinyDeepDR_LUSC.csv",
+  ruta_cdr = "data/analysis/results/resultados_repo/LUSC_CDRPipe_Resultados.csv",
+  ruta_cmap = "data/analysis/results/resultados_repo/CMap/CMap_Resultados_LUSC.csv",
+  ruta_ilincs = "data/analysis/results/resultados_repo/iLINCS/LUSC/LUSC_exemplar_top100_resultados.xls",
+  ruta_shiny = "data/analysis/results/resultados_repo/ShinyDeepDR/shinyDeepDR_LUSC.csv",
   archivo_salida = "Farmacos_Consenso_LUSC"
 )

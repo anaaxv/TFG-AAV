@@ -39,7 +39,7 @@ if(!require("UpSetR", quietly = TRUE))
   install.packages("UpSetR")
 
 if(!require("patchwork", quietly = TRUE))
-  install.packages("patchwork")
+  install.packages("patchwork") 
 
 library(TCGAbiolinks)
 library(SummarizedExperiment)
