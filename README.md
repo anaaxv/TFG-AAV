@@ -91,25 +91,25 @@ Usa `TCGAbiolinks` para descargar desde el GDC:
 La función `procesar_expr()` realiza:
 
 1.  Extracción del ID de paciente y tipo de muestra desde el barcode
-    TCGA (`01` = Tumor, `11` = Normal)
+    TCGA (`01` = Tumor, `11` = Normal).
 2.  Eliminación de duplicados por paciente y tipo (se conserva la
-    muestra con mayor tamaño de librería)
-3.  Cruce con los datos clínicos disponibles
+    muestra con mayor tamaño de librería).
+3.  Cruce con los datos clínicos disponibles.
 4.  Para pacientes pareados (Tumor + Normal), se conserva únicamente la
-    muestra Normal para el análisis
+    muestra Normal para el análisis.
 
 ### Bloque 3 — Análisis de expresión diferencial
 
 Se aplican dos métodos complementarios con distintas combinaciones de
 umbrales (FDR ∈ {0.01, 0.05} × LFC ∈ {1, 2}):
 
-**EdgeR** (`complete_edgeR_analysis`): - Filtrado con `filterByExpr` -
-Normalización TMM - Modelo QL (*Quasi-Likelihood*) con `glmTreat` para
-test con umbral de fold change
+-   **EdgeR** (`complete_edgeR_analysis`): - Filtrado con
+    `filterByExpr` - Normalización TMM - Modelo QL (*Quasi-Likelihood*)
+    con `glmTreat` para test con umbral de fold change.
 
-**Voom/Limma** (`analysis_voom`): - Filtrado: ≥10 counts en al menos el
-10% de las muestras - Normalización TMM + transformación voom - Modelo
-lineal con `eBayes` y corrección FDR
+-   **Voom/Limma** (`analysis_voom`): - Filtrado: ≥10 counts en al menos
+    el 10% de las muestras - Normalización TMM + transformación voom -
+    Modelo lineal con `eBayes` y corrección FDR.
 
 Los DEGs finales por cáncer son la **intersección** entre ambos métodos.
 Los DEGs comunes a LUAD y LUSC se obtienen cruzando ambas listas.
@@ -141,16 +141,16 @@ devueltos por Clue Query y filtra los fármacos con **NCS \< −1.5**
 herramientas:
 
 -   Normaliza los nombres de fármacos (minúsculas, eliminación de
-    espacios)
+    espacios).
 -   Filtra por dirección de reversión en cada herramienta:
     -   CDRPipe: `cmap_score < 0`
     -   CMap: `NCS < 0`
     -   iLINCS: `Concordance < 0`
     -   ShinyDeepDR: `IC50 (log µM) < 0`
 -   Construye una tabla de presencia (0/1) para cada fármaco en cada
-    herramienta
+    herramienta.
 -   Ordena por número de herramientas que validan el candidato, score
-    iLINCS e IC50
+    iLINCS e IC50.
 
 **Gráficos generados:** UpSet plot de intersecciones, boxplots de Score
 iLINCS e IC50 por nivel de consenso.
@@ -206,6 +206,12 @@ BiocManager::install("TCGAbiolinks")
 > deben subirse manualmente a cada plataforma y los resultados
 > descargarse antes de ejecutar los Bloques 5 y 6.
 
+> **Advertencia:** Se recomienda no limpiar el entorno de R manualmente
+> entre bloques. Algunos objetos se mantienen en memoria de forma
+> deliberada porque son reutilizados en pasos posteriores. Si se
+> necesita liberar memoria, reinicia desde el bloque correspondiente
+> cargando los `.rds` de `data/`.
+
 ------------------------------------------------------------------------
 
 ## Herramientas externas de reposicionamiento
@@ -224,8 +230,8 @@ BiocManager::install("TCGAbiolinks")
 Para cada tipo de cáncer (LUAD/LUSC) y combinación de umbrales se
 generan:
 
--   Tabla completa de todos los genes analizados (`*_all_genes.txt`)
--   Tabla de DEGs significativos (`*_DEGs.txt`)
--   Inputs para todas las herramientas de reposicionamiento
+-   Tabla completa de todos los genes analizados (`*_all_genes.txt`).
+-   Tabla de DEGs significativos (`*_DEGs.txt`).
+-   Inputs para todas las herramientas de reposicionamiento.
 -   Tabla de fármacos consenso con scores de cada herramienta
-    (`Farmacos_Consenso_*.csv`)
+    (`Farmacos_Consenso_*.csv`).

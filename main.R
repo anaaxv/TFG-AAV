@@ -220,9 +220,54 @@ for (key in names(common_deg_lung)) {
   saveRDS(common_lung, paste0("data/common_lung_deg_", key, ".rds"))
 }
 
-rm(cancers, fdr_values, lfc_values, params, common_deg_lung, common_lung)
+rm(cancers, fdr_values, lfc_values, common_deg_lung, common_lung)
 gc()
 
+#----------------
+#BLOQUE 3.5 (Opcional): Generamos gráfica de distribución de DEGs:
+
+# Bucle para cargar TODOS los .rds resultantes del análisis de expresión (Edge R y Voom) en el environment:
+for (i in 1:nrow(params)) {
+  can      <- params$cancer[i]
+  curr_fdr <- params$fdr[i]
+  curr_lfc <- params$lfc[i]
+  
+  #Creamos el sufijo y los nombres de las variables en formato texto
+  suffix <- paste0(can, "_FDR", curr_fdr, "_LFC", curr_lfc)
+  var_edgeR <- paste0("res_edgeR_", suffix)
+  var_voom  <- paste0("res_voom_", suffix)
+  
+  #Construimos la ruta hacia los archivos .rds
+  ruta_edgeR <- paste0("data/res_edgeR_", suffix, ".rds")
+  ruta_voom  <- paste0("data/res_voom_", suffix, ".rds")
+  
+  #Si los archivos existen, los leemos y asignamos su contenido a la variable dinámica
+  if (file.exists(ruta_edgeR)) {
+    assign(var_edgeR, readRDS(ruta_edgeR), envir = .GlobalEnv)
+  }
+  if (file.exists(ruta_voom)) {
+    assign(var_voom, readRDS(ruta_voom), envir = .GlobalEnv)
+  }
+}
+
+rm(params, can, curr_fdr, curr_lfc, i, ruta_edgeR, ruta_voom, suffix, var_edgeR, var_voom)
+gc()
+
+grafica_degs <- plot_deg_distribution()
+print(grafica_degs)
+
+objetos_a_borrar <- ls(pattern = "^res_(edgeR|voom)_")
+
+#Si encuentra objetos, los borra en lote y libera memoria RAM
+if (length(objetos_a_borrar) > 0) {
+  rm(list = objetos_a_borrar, envir = .GlobalEnv)
+  cat("\n--- Se han eliminado", length(objetos_a_borrar), "objetos de DEGs del entorno. ---\n")
+} else {
+  cat("\n--- No se encontraron objetos de DEGs para borrar. ---\n")
+}
+
+rm(objetos_a_borrar)
+gc()
 
 #---------------------------
 #BLOQUE 4: GENERAMOS LOS INPUTS PARA LAS HERRAMIENTAS DE REPOSICIONAMIENTO
@@ -351,3 +396,10 @@ farmacos_consenso_LUSC<-obtener_farmacos_consenso(
   ruta_shiny = "data/analysis/results/resultados_repo/ShinyDeepDR/shinyDeepDR_LUSC.csv",
   archivo_salida = "Farmacos_Consenso_LUSC"
 )
+
+
+
+
+
+
+

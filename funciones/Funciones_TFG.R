@@ -39,7 +39,10 @@ if(!require("UpSetR", quietly = TRUE))
   install.packages("UpSetR")
 
 if(!require("patchwork", quietly = TRUE))
-  install.packages("patchwork") 
+  install.packages("patchwork")
+
+if(!require("tidyr", quietly = TRUE))
+  install.packages("tidyr")
 
 library(TCGAbiolinks)
 library(SummarizedExperiment)
@@ -56,6 +59,7 @@ library(stringr)
 library(UpSetR)
 library(patchwork)
 library(here)
+library(tidyr)
 
 #expr_LUAD es un SummarizedExperiment en el que las filas son los genes y las columnas las muestras
 #de RNA-seq, cada columna corresponde a un archivo .tsv
@@ -593,6 +597,112 @@ analysis_voom<-function(expr_data,
     down_genes_pc = down_pc
   ))
 }
+#__________
+#Gráfica de distribución de DEGS:
+plot_deg_distribution <- function(cancers = c("LUAD", "LUSC"),
+                                  metodos = c("edgeR", "voom"),
+                                  fdr_values = c("0.05", "0.01"),
+                                  lfc_values = c("1", "2"),
+                                  max_y = 7500) {
+  
+
+  df_general <- data.frame()
+  
+  #Bucle de extracción automatizada buscando en el entorno
+  for (can in cancers) {
+    for (met in metodos) {
+      for (curr_fdr in fdr_values) {
+        for (curr_lfc in lfc_values) {
+          
+          nombre_objeto <- paste0("res_", met, "_", can, "_FDR", curr_fdr, "_LFC", curr_lfc)
+          
+          # Especificamos envir = .GlobalEnv para que encuentre tus objetos cargados
+          if (exists(nombre_objeto, envir = .GlobalEnv)) {
+            obj <- get(nombre_objeto, envir = .GlobalEnv)
+            
+            up_total   <- nrow(obj$up_genes)
+            up_pc      <- nrow(obj$up_genes_pc)
+            down_total <- nrow(obj$down_genes)
+            down_pc    <- nrow(obj$down_genes_pc)
+            
+            temp_df <- rbind(
+              # UP
+              data.frame(Cancer = can, Metodo = ifelse(met == "edgeR", "EdgeR", "Voom"),
+                         Umbral = paste0("LFC ", curr_lfc, " | FDR ", curr_fdr),
+                         Regulacion = "Up", Tipo_Gene = "Protein Coding", Conteo = up_pc, Total_Label = up_total, PC_Label = up_pc),
+              data.frame(Cancer = can, Metodo = ifelse(met == "edgeR", "EdgeR", "Voom"),
+                         Umbral = paste0("LFC ", curr_lfc, " | FDR ", curr_fdr),
+                         Regulacion = "Up", Tipo_Gene = "Otros DEGs", Conteo = up_total - up_pc, Total_Label = up_total, PC_Label = up_pc),
+              # DOWN
+              data.frame(Cancer = can, Metodo = ifelse(met == "edgeR", "EdgeR", "Voom"),
+                         Umbral = paste0("LFC ", curr_lfc, " | FDR ", curr_fdr),
+                         Regulacion = "Down", Tipo_Gene = "Protein Coding", Conteo = down_pc, Total_Label = down_total, PC_Label = down_pc),
+              data.frame(Cancer = can, Metodo = ifelse(met == "edgeR", "EdgeR", "Voom"),
+                         Umbral = paste0("LFC ", curr_lfc, " | FDR ", curr_fdr),
+                         Regulacion = "Down", Tipo_Gene = "Otros DEGs", Conteo = down_total - down_pc, Total_Label = down_total, PC_Label = down_pc)
+            )
+            df_general <- rbind(df_general, temp_df)
+          }
+        }
+      }
+    }
+  }
+  
+  #Control de seguridad por si acaso no encuentra ningún objeto
+  if (nrow(df_general) == 0) {
+    stop("No se encontraron objetos con el patrón 'res_metodo_cancer_FDR_LFC' en tu entorno.")
+  }
+  
+  #Generamos el orden de los niveles del eje X de forma dinámica según tus inputs
+  lista_umbrales <- c()
+  for (l in lfc_values) {
+    for (f in fdr_values) {
+      lista_umbrales <- c(lista_umbrales, paste0("LFC ", l, " | FDR ", f))
+    }
+  }
+  df_general$Umbral <- factor(df_general$Umbral, levels = unique(lista_umbrales))
+  
+  #Formateo de posiciones y etiquetas
+  df_general <- df_general %>%
+    mutate(
+      Metodo_num = ifelse(Metodo == "EdgeR", 1, 2),
+      X_pos = ifelse(Regulacion == "Up", Metodo_num - 0.2, Metodo_num + 0.2),
+      Etiqueta = paste0(Total_Label, "\n(", PC_Label, ")")
+    )
+  
+  df_general$Tipo_Gene <- factor(df_general$Tipo_Gene, levels = c("Protein Coding", "Otros DEGs"))
+  
+  #Construcción de la gráfica de ggplot2
+  grafica_degs <- ggplot(df_general, aes(x = X_pos, y = Conteo, fill = Regulacion, alpha = Tipo_Gene)) +
+    geom_col(position = "stack", width = 0.35, color = "black") +
+    
+    geom_text(data = df_general %>% filter(Tipo_Gene == "Protein Coding"), 
+              aes(x = X_pos, y = Total_Label, label = Etiqueta),
+              vjust = -0.15, lineheight = 0.85, size = 2.5, alpha = 1, inherit.aes = FALSE) +
+    
+    scale_fill_manual(values = c("Up" = "firebrick3", "Down" = "dodgerblue3")) +
+    scale_alpha_manual(values = c("Protein Coding" = 1.0, "Otros DEGs" = 0.45)) +
+    
+    scale_x_continuous(breaks = seq_along(metodos), labels = tools::toTitleCase(metodos)) +
+    scale_y_continuous(limits = c(0, max_y), expand = expansion(mult = c(0, 0.02))) +
+    
+    facet_grid(Cancer ~ Umbral) +
+    labs(title = "Distribución de DEGs Totales y Codificantes para Proteína",
+         x = "Método", y = "Número de DEGs", fill = "Regulación", alpha = "Fracción de la Barra") +
+    theme_bw() +
+    theme(strip.text = element_text(face = "bold"), 
+          legend.position = "bottom")
+
+  return(grafica_degs)
+}
+
+
+
+
+
+
+
+
 
 #----------------------------------
 
@@ -900,3 +1010,5 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
   
   return(tabla_final)
 }
+
+
