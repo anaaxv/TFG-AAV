@@ -219,7 +219,7 @@ BiocManager::install("TCGAbiolinks")
 | Herramienta | URL | Descripción |
 |------------------------|------------------------|------------------------|
 | **Clue Query (CMap)** | [clue.io](https://clue.io) | Conectividad de firma génica con perfiles de fármacos (LINCS L1000) |
-| **CDRPipe** | [cdrpipe](https://comphealth.ucsf.edu/app/cdrpipe) | Pipeline de reposicionamiento basado en expresión diferencial |
+| **CDRPipe** | [cdrpipe.org](https://www.cdrpipe.org/) | Pipeline de reposicionamiento basado en expresión diferencial |
 | **iLINCS** | [ilincs.org](http://ilincs.org) | Integración de firmas transcriptómicas con perturbágenos |
 | **ShinyDeepDR** | [shinydeepdr](https://shiny.crc.pitt.edu/shinydeepdr/) | Predicción de sensibilidad a fármacos basada en deep learning |
 
