@@ -315,7 +315,8 @@ analysis_edgeR<-function(dgl,
         min.segment.length = 0,
         segment.size = 0.2,
         max.overlaps = Inf,
-        seed=42
+        seed=42,
+        show.legend = FALSE
       )+
       labs(title=paste(plot_prefix,"- Volcano Plot"),
            x="Log2 Fold Change",
@@ -437,7 +438,7 @@ analysis_voom<-function(expr_data,
                         reference_level="Normal",
                         lfc_threshold=2,
                         fdr_threshold=0.01,
-                        plots=list(volcano=TRUE, hm=TRUE), 
+                        plots=list(pca=TRUE, volcano=TRUE, hm=TRUE), 
                         base_folder="data",
                         plot_prefix="Voom"){
   
@@ -451,7 +452,6 @@ analysis_voom<-function(expr_data,
   counts<-as.matrix(counts) #aseguramos que sea matriz
   mode(counts)<-"numeric" #forzamos a numerico
   counts[is.na(counts)]<-0 #sustituimos NAs por 0
-  
   
   group<-factor(colData(expr_data)[[group_variable]])
   group<-relevel(group, ref=reference_level)
@@ -496,7 +496,28 @@ analysis_voom<-function(expr_data,
   
   cat("Número de DEGs (voom):", nrow(significant), " (Up:", nrow(up_genes), ", Down:", nrow(down_genes), ")\n")
   
-  #Generamos las gráficas:
+  if (plots$pca) {
+    pca <- prcomp(t(v$E), scale.=TRUE)
+    
+    pca_df <- data.frame(
+      PC1 = pca$x[,1],
+      PC2 = pca$x[,2],
+      group = group
+    )
+    
+    # Varianza explicada:
+    var_expl <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1) 
+    
+    p_pca <- ggplot(pca_df, aes(PC1, PC2, color=group)) +
+      geom_point(size=2) +
+      labs(title=paste(plot_prefix, "- PCA"),
+           x=paste0("PC1 (", var_expl[1], "%)"),
+           y=paste0("PC2 (", var_expl[2], "%)")) +
+      theme_minimal()
+    
+    print(p_pca)
+  }
+  
   if (plots$volcano){
     volcano_df<-results
     
@@ -521,7 +542,8 @@ analysis_voom<-function(expr_data,
         min.segment.length = 0,
         segment.size = 0.2,
         max.overlaps = Inf,
-        seed=42
+        seed=42,
+        show.legend=FALSE
       )+
       labs(title=paste(plot_prefix,"- Volcano Plot"),
            x="Log2 Fold Change",
@@ -534,22 +556,21 @@ analysis_voom<-function(expr_data,
   if (plots$hm && nrow(significant) > 0) {
     #Seleccionamos los IDs de los top genes:
     top_genes_hm <- significant %>%
-      arrange(adj.P.Val) %>% # O FDR en edgeR
+      arrange(adj.P.Val) %>% 
       head(50) %>%
       pull(id_cruce)
     
-    #Extraer los counts (v$E para voom o logCPM para edgeR):
+    #Extraer los counts (v$E para voom):
     heatmap_data <- v$E 
     rownames(heatmap_data) <- sub("\\..*", "", rownames(heatmap_data))
     heatmap_data <- heatmap_data[rownames(heatmap_data) %in% top_genes_hm, ]
     
     #Ordenamos las muestras por grupo:
-    # Creamos un índice para ordenar: primero Normal, luego Tumor (según tus niveles)
     orden_muestras <- order(group)
     heatmap_data <- heatmap_data[, orden_muestras] 
     
     #Preparamos la anotación con el nuevo orden:
-    annotation_col <- data.frame(Group = group[orden_muestras]) # <<-- CAMBIO
+    annotation_col <- data.frame(Group = group[orden_muestras])
     rownames(annotation_col) <- colnames(heatmap_data)
     
     #Generamos el heatmap:

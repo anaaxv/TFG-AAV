@@ -5,7 +5,8 @@ library(here)
 
 source(here("funciones", "Funciones_TFG.R"))
 
-#----------------------------------------------
+#________________________________________________________________________
+
 #BLOQUE 1: DESCARGA DE DATOS TRANSCRIPTÓMICOS, CLÍNICOS Y DE MUTACIONES: 
 
 #Definimos la ruta al directorio en el que se descargarán los datos y lo creamos:
@@ -107,7 +108,7 @@ rm(query_expr_LUAD, query_expr_LUSC,
    query_clinical_LUAD, query_clinical_LUSC,
    mut_LUAD, mut_LUSC)
 gc()
-#---------------------------------------
+#________________________________________________________________________
 #BLOQUE 2: PROCESAMIENTO DE DATOS DE EXPRESIÓN
 
 #Obtenemos los perfiles de expresión definitivos para LUAD y LUSC:
@@ -140,10 +141,8 @@ saveRDS(common_patients_LUSC, "data/common_patients_LUSC.rds")
 rm(expr_LUSC_raw,res_LUSC,common_patients_LUSC)
 gc()
 
-#--------------------------------------------
-#BLOQUE 3: ANÁLISIS DE EXPRESIÓN (EdgeR y Voom) ((INCLUIR RM Y GC))
-#Este bloque tarda bastante en ejecutarse
-#A mí me tarda aproximadamente unas 2h, sacando todos los gráficos asociados
+#________________________________________________________________________
+#BLOQUE 3: ANÁLISIS DE EXPRESIÓN (EdgeR y Voom) 
 
 #Definimos los parámetros de prueba
 cancers <- c("LUAD", "LUSC")
@@ -223,7 +222,7 @@ for (key in names(common_deg_lung)) {
 rm(cancers, fdr_values, lfc_values, common_deg_lung, common_lung)
 gc()
 
-#----------------
+#________________________________________________________________________
 #BLOQUE 3.5 (Opcional): Generamos gráfica de distribución de DEGs:
 
 # Bucle para cargar TODOS los .rds resultantes del análisis de expresión (Edge R y Voom) en el environment:
@@ -269,7 +268,7 @@ if (length(objetos_a_borrar) > 0) {
 rm(objetos_a_borrar)
 gc()
 
-#---------------------------
+#________________________________________________________________________
 #BLOQUE 4: GENERAMOS LOS INPUTS PARA LAS HERRAMIENTAS DE REPOSICIONAMIENTO
 
 #ShinyDeepDR, expresión:
@@ -361,7 +360,7 @@ inputs_ilincs(
 inputs_clue(df_comun_luad, "LUAD")
 inputs_clue(df_comun_lusc, "LUSC")
 
-#-------------------------------------
+#________________________________________________________________________
 #BLOQUE 5: TRATAMIENTO DE RESULTADOS DE CLUE QUERY 
 res_LUAD_CMap <- analizar_resultados_clue(
   ruta_gct = "data/analysis/results/resultados_repo/LUAD_Clue_comunes/my_analysis.sig_queryl1k_tool.6a03285d8ed9720013827997/ncs.gct",
@@ -376,7 +375,7 @@ res_LUSC_CMap <- analizar_resultados_clue(
 saveRDS(res_LUAD_CMap,here("data", "candidatos_LUSC_CMap.rds")) 
 
 
-#----------------------------------------------
+#________________________________________________________________________
 #BLOQUE 6: OBTENER FÁRMACOS CONSENSO 
 
 #Ejecutamos función de fármacos consenso para LUAD:
@@ -396,10 +395,4 @@ farmacos_consenso_LUSC<-obtener_farmacos_consenso(
   ruta_shiny = "data/analysis/results/resultados_repo/ShinyDeepDR/shinyDeepDR_LUSC.csv",
   archivo_salida = "Farmacos_Consenso_LUSC"
 )
-
-
-
-
-
-
 
