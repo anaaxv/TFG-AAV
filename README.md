@@ -67,7 +67,7 @@ BLOQUE 6   ─► Integración y obtención de fármacos consenso
 Usa `TCGAbiolinks` para descargar desde el GDC:
 
 | Tipo de dato               | Proyecto             | Formato                 |
-|------------------------|------------------------|------------------------|
+|----------------------------|----------------------|-------------------------|
 | Expresión génica (RNA-seq) | TCGA-LUAD, TCGA-LUSC | STAR - Counts           |
 | Mutaciones somáticas       | TCGA-LUAD, TCGA-LUSC | Masked Somatic Mutation |
 | Datos clínicos             | TCGA-LUAD, TCGA-LUSC | BCR Biotab              |
@@ -96,7 +96,7 @@ Los DEGs finales por cáncer son la **intersección** entre ambos métodos. Los 
 ### Bloque 4 — Inputs para reposicionamiento
 
 | Herramienta | Función | Input generado |
-|------------------------|------------------------|------------------------|
+|----|----|----|
 | **ShinyDeepDR** | `inputs_shinyDeepDR()` | Mediana de TPMs tumorales (expresión) + archivo MAF (mutaciones) |
 | **CDRPipe** | `inputs_cdrpipe()` | CSV con SYMBOL, log2FC y p-valor ajustado |
 | **iLINCS** | `inputs_ilincs()` | TXT tabulado (formato CDRPipe sin cabecera) |
@@ -170,7 +170,7 @@ BiocManager::install("TCGAbiolinks")
 ## Herramientas externas de reposicionamiento
 
 | Herramienta | URL | Descripción |
-|------------------------|------------------------|------------------------|
+|----|----|----|
 | **Clue Query (CMap)** | [clue.io](https://clue.io) | Conectividad de firma génica con perfiles de fármacos (LINCS L1000) |
 | **CDRPipe** | [cdrpipe.org](https://www.cdrpipe.org/) | Pipeline de reposicionamiento basado en expresión diferencial |
 | **iLINCS** | [ilincs.org](http://ilincs.org) | Integración de firmas transcriptómicas con perturbágenos |

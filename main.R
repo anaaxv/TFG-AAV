@@ -255,6 +255,18 @@ gc()
 grafica_degs <- plot_deg_distribution()
 print(grafica_degs)
 
+luad_compartidos <- generar_venn_comparativo(
+  res_edgeR = res_edgeR_LUAD_FDR0.01_LFC2, 
+  res_voom = res_voom_LUAD_FDR0.01_LFC1, 
+  tipo_cancer = "LUAD"
+)
+
+lusc_compartidos <- generar_venn_comparativo(
+  res_edgeR = res_edgeR_LUSC_FDR0.01_LFC2, 
+  res_voom = res_voom_LUSC_FDR0.01_LFC2, 
+  tipo_cancer = "LUSC"
+)
+
 objetos_a_borrar <- ls(pattern = "^res_(edgeR|voom)_")
 
 #Si encuentra objetos, los borra en lote y libera memoria RAM
@@ -395,4 +407,6 @@ farmacos_consenso_LUSC<-obtener_farmacos_consenso(
   ruta_shiny = "data/analysis/results/resultados_repo/ShinyDeepDR/shinyDeepDR_LUSC.csv",
   archivo_salida = "Farmacos_Consenso_LUSC"
 )
+
+
 

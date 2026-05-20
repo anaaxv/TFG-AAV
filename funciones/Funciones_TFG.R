@@ -1,65 +1,22 @@
+
 #Instalamos las librerías necesarias si no las tenemos ya: 
-if (!require("BiocManager", quietly=TRUE)) 
-  install.packages("BiocManager")
 
-if (!require("TCGAbiolinks", quietly = TRUE))
-  BiocManager::install("TCGAbiolinks")  
+paquetes_cran <- c("DT", "dplyr", "pheatmap", "ggrepel", "stringr", "here", "UpSetR", "patchwork", "tidyr", "ggvenn", "ggplot2")
+paquetes_bioc <- c("TCGAbiolinks", "edgeR", "limma", "biomaRt", "cmapR", "SummarizedExperiment")
 
-if (!require("edgeR", quietly = TRUE)) 
-  BiocManager::install("edgeR")
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
 
-if (!require("limma", quietly = TRUE))
-  BiocManager::install("limma")
+for (x in paquetes_cran) {
+  if (!requireNamespace(x, quietly = TRUE)) install.packages(x)
+}
+for (x in paquetes_bioc) {
+  if (!requireNamespace(x, quietly = TRUE)) BiocManager::install(x, update = FALSE)
+}
 
-if (!require("biomaRt", quietly = TRUE))
-  BiocManager::install("biomaRt")
+#Los cargamos en la sesión:
+paquetes_totales <- c(paquetes_cran, paquetes_bioc)
+invisible(lapply(paquetes_totales, library, character.only = TRUE))
 
-if (!require("cmapR", quietly = TRUE))
-  BiocManager::install("cmapR")
-
-if (!require("DT", quietly = TRUE))
-  install.packages("DT")
-
-if (!require("dplyr", quietly = TRUE))
-  install.packages("dplyr")
-
-if (!require("pheatmap", quietly = TRUE))
-  install.packages("pheatmap")
-
-if (!require("ggrepel", quietly = TRUE))
-  install.packages("ggrepel")
-
-if (!require("stringr", quietly = TRUE))
-  install.packages("stringr")
-
-if(!require("here", quietly = TRUE))
-  install.packages("here")
-
-if(!require("UpSetR", quietly = TRUE))
-  install.packages("UpSetR")
-
-if(!require("patchwork", quietly = TRUE))
-  install.packages("patchwork")
-
-if(!require("tidyr", quietly = TRUE))
-  install.packages("tidyr")
-
-library(TCGAbiolinks)
-library(SummarizedExperiment)
-library(DT)
-library(dplyr)
-library(edgeR)
-library(limma)
-library(ggplot2)
-library(biomaRt)
-library(pheatmap)
-library(ggrepel)
-library(cmapR)
-library(stringr)
-library(UpSetR)
-library(patchwork)
-library(here)
-library(tidyr)
 
 #expr_LUAD es un SummarizedExperiment en el que las filas son los genes y las columnas las muestras
 #de RNA-seq, cada columna corresponde a un archivo .tsv
@@ -1030,6 +987,76 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
   cat("Fármacos consenso obtenidos\n")
   
   return(tabla_final)
+}
+
+#__________
+#prueba venn:
+
+# Asegúrate de tener instalada la librería: install.packages("ggvenn")
+generar_venn_comparativo <- function(res_edgeR, res_voom, tipo_cancer="LUAD", base_folder="data") {
+  # 1. Extraemos los IDs de los genes (id_cruce) que son UP y DOWN en edgeR
+  edger_up   <- res_edgeR$up_genes$id_cruce
+  edger_down <- res_edgeR$down_genes$id_cruce
+  
+  # 2. Extraemos los IDs de los genes que son UP y DOWN en voom
+  voom_up    <- res_voom$up_genes$id_cruce
+  voom_down  <- res_voom$down_genes$id_cruce
+  
+  # Listas para el diagrama de Venn - UP
+  lista_up <- list(
+    "edgeR (Up)" = edger_up,
+    "Voom (Up)"  = voom_up
+  )
+  
+  # Listas para el diagrama de Venn - DOWN
+  lista_down <- list(
+    "edgeR (Down)" = edger_down,
+    "Voom (Down)"  = voom_down
+  )
+  
+  # Configuración de colores estéticos (Pasteles pero profesionales)
+  colores <- c("firebrick3", "orange")
+  colores_down <- c("dodgerblue3", "turquoise3")
+  
+  # Graficar UP
+  p_up <- ggvenn(
+    lista_up, 
+    fill_color = colores,
+    stroke_size = 0.5, 
+    set_name_size = 4,   # Tamaño del nombre de los conjuntos (círculos)
+    text_size = 3
+  ) + 
+    labs(title = paste0(tipo_cancer, " - Genes Sobreexpresados (UP)")) +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12)) # <<-- Centrado de título integrado
+  
+  # Graficar DOWN
+  p_down <- ggvenn(
+    lista_down, 
+    fill_color = colores_down,
+    stroke_size = 0.5, 
+    set_name_size = 4,   # Tamaño del nombre de los conjuntos (círculos)
+    text_size = 3
+  ) + 
+    labs(title = paste0(tipo_cancer, " - Genes Infraexpresados (DOWN)")) +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12)) # <<-- Centrado de título integrado
+  
+  # Mostramos los gráficos por pantalla
+  print(p_up)
+  print(p_down)
+  
+  # Guardar los gráficos en la carpeta de resultados correspondientes
+  # (Asumiendo que ya tienes creada la estructura de carpetas)
+  output_dir <- file.path(base_folder, "analysis", "results", "Venn_Diagrams")
+  if(!dir.exists(output_dir)) dir.create(output_dir, recursive=TRUE)
+  
+  ggsave(file.path(output_dir, paste0(tipo_cancer, "_Venn_UP.png")), plot=p_up, width=6, height=5, dpi=300)
+  ggsave(file.path(output_dir, paste0(tipo_cancer, "_Venn_DOWN.png")), plot=p_down, width=6, height=5, dpi=300)
+  
+  # Opcional: Devolver los genes que coinciden exactamente en ambos métodos
+  return(list(
+    shared_up = intersect(edger_up, voom_up),
+    shared_down = intersect(edger_down, voom_down)
+  ))
 }
 
 
