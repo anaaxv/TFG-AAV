@@ -1,61 +1,22 @@
+
 #Instalamos las librerías necesarias si no las tenemos ya: 
-if (!require("BiocManager", quietly=TRUE)) 
-  install.packages("BiocManager")
 
-if (!require("TCGAbiolinks", quietly = TRUE))
-  BiocManager::install("TCGAbiolinks")  
+paquetes_cran <- c("DT", "dplyr", "pheatmap", "ggrepel", "stringr", "here", "UpSetR", "patchwork", "tidyr", "ggvenn", "ggplot2")
+paquetes_bioc <- c("TCGAbiolinks", "edgeR", "limma", "biomaRt", "cmapR", "SummarizedExperiment")
 
-if (!require("edgeR", quietly = TRUE)) 
-  BiocManager::install("edgeR")
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
 
-if (!require("limma", quietly = TRUE))
-  BiocManager::install("limma")
+for (x in paquetes_cran) {
+  if (!requireNamespace(x, quietly = TRUE)) install.packages(x)
+}
+for (x in paquetes_bioc) {
+  if (!requireNamespace(x, quietly = TRUE)) BiocManager::install(x, update = FALSE)
+}
 
-if (!require("biomaRt", quietly = TRUE))
-  BiocManager::install("biomaRt")
+#Los cargamos en la sesión:
+paquetes_totales <- c(paquetes_cran, paquetes_bioc)
+invisible(lapply(paquetes_totales, library, character.only = TRUE))
 
-if (!require("cmapR", quietly = TRUE))
-  BiocManager::install("cmapR")
-
-if (!require("DT", quietly = TRUE))
-  install.packages("DT")
-
-if (!require("dplyr", quietly = TRUE))
-  install.packages("dplyr")
-
-if (!require("pheatmap", quietly = TRUE))
-  install.packages("pheatmap")
-
-if (!require("ggrepel", quietly = TRUE))
-  install.packages("ggrepel")
-
-if (!require("stringr", quietly = TRUE))
-  install.packages("stringr")
-
-if(!require("here", quietly = TRUE))
-  install.packages("here")
-
-if(!require("UpSetR", quietly = TRUE))
-  install.packages("UpSetR")
-
-if(!require("patchwork", quietly = TRUE))
-  install.packages("patchwork")
-
-library(TCGAbiolinks)
-library(SummarizedExperiment)
-library(DT)
-library(dplyr)
-library(edgeR)
-library(limma)
-library(ggplot2)
-library(biomaRt)
-library(pheatmap)
-library(ggrepel)
-library(cmapR)
-library(stringr)
-library(UpSetR)
-library(patchwork)
-library(here)
 
 #expr_LUAD es un SummarizedExperiment en el que las filas son los genes y las columnas las muestras
 #de RNA-seq, cada columna corresponde a un archivo .tsv
@@ -311,7 +272,8 @@ analysis_edgeR<-function(dgl,
         min.segment.length = 0,
         segment.size = 0.2,
         max.overlaps = Inf,
-        seed=42
+        seed=42,
+        show.legend = FALSE
       )+
       labs(title=paste(plot_prefix,"- Volcano Plot"),
            x="Log2 Fold Change",
@@ -433,7 +395,7 @@ analysis_voom<-function(expr_data,
                         reference_level="Normal",
                         lfc_threshold=2,
                         fdr_threshold=0.01,
-                        plots=list(volcano=TRUE, hm=TRUE), 
+                        plots=list(pca=TRUE, volcano=TRUE, hm=TRUE), 
                         base_folder="data",
                         plot_prefix="Voom"){
   
@@ -447,7 +409,6 @@ analysis_voom<-function(expr_data,
   counts<-as.matrix(counts) #aseguramos que sea matriz
   mode(counts)<-"numeric" #forzamos a numerico
   counts[is.na(counts)]<-0 #sustituimos NAs por 0
-  
   
   group<-factor(colData(expr_data)[[group_variable]])
   group<-relevel(group, ref=reference_level)
@@ -492,7 +453,28 @@ analysis_voom<-function(expr_data,
   
   cat("Número de DEGs (voom):", nrow(significant), " (Up:", nrow(up_genes), ", Down:", nrow(down_genes), ")\n")
   
-  #Generamos las gráficas:
+  if (plots$pca) {
+    pca <- prcomp(t(v$E), scale.=TRUE)
+    
+    pca_df <- data.frame(
+      PC1 = pca$x[,1],
+      PC2 = pca$x[,2],
+      group = group
+    )
+    
+    # Varianza explicada:
+    var_expl <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1) 
+    
+    p_pca <- ggplot(pca_df, aes(PC1, PC2, color=group)) +
+      geom_point(size=2) +
+      labs(title=paste(plot_prefix, "- PCA"),
+           x=paste0("PC1 (", var_expl[1], "%)"),
+           y=paste0("PC2 (", var_expl[2], "%)")) +
+      theme_minimal()
+    
+    print(p_pca)
+  }
+  
   if (plots$volcano){
     volcano_df<-results
     
@@ -517,7 +499,8 @@ analysis_voom<-function(expr_data,
         min.segment.length = 0,
         segment.size = 0.2,
         max.overlaps = Inf,
-        seed=42
+        seed=42,
+        show.legend=FALSE
       )+
       labs(title=paste(plot_prefix,"- Volcano Plot"),
            x="Log2 Fold Change",
@@ -530,22 +513,21 @@ analysis_voom<-function(expr_data,
   if (plots$hm && nrow(significant) > 0) {
     #Seleccionamos los IDs de los top genes:
     top_genes_hm <- significant %>%
-      arrange(adj.P.Val) %>% # O FDR en edgeR
+      arrange(adj.P.Val) %>% 
       head(50) %>%
       pull(id_cruce)
     
-    #Extraer los counts (v$E para voom o logCPM para edgeR):
+    #Extraer los counts (v$E para voom):
     heatmap_data <- v$E 
     rownames(heatmap_data) <- sub("\\..*", "", rownames(heatmap_data))
     heatmap_data <- heatmap_data[rownames(heatmap_data) %in% top_genes_hm, ]
     
     #Ordenamos las muestras por grupo:
-    # Creamos un índice para ordenar: primero Normal, luego Tumor (según tus niveles)
     orden_muestras <- order(group)
     heatmap_data <- heatmap_data[, orden_muestras] 
     
     #Preparamos la anotación con el nuevo orden:
-    annotation_col <- data.frame(Group = group[orden_muestras]) # <<-- CAMBIO
+    annotation_col <- data.frame(Group = group[orden_muestras])
     rownames(annotation_col) <- colnames(heatmap_data)
     
     #Generamos el heatmap:
@@ -593,6 +575,112 @@ analysis_voom<-function(expr_data,
     down_genes_pc = down_pc
   ))
 }
+#__________
+#Gráfica de distribución de DEGS:
+plot_deg_distribution <- function(cancers = c("LUAD", "LUSC"),
+                                  metodos = c("edgeR", "voom"),
+                                  fdr_values = c("0.05", "0.01"),
+                                  lfc_values = c("1", "2"),
+                                  max_y = 7500) {
+  
+
+  df_general <- data.frame()
+  
+  #Bucle de extracción automatizada buscando en el entorno
+  for (can in cancers) {
+    for (met in metodos) {
+      for (curr_fdr in fdr_values) {
+        for (curr_lfc in lfc_values) {
+          
+          nombre_objeto <- paste0("res_", met, "_", can, "_FDR", curr_fdr, "_LFC", curr_lfc)
+          
+          # Especificamos envir = .GlobalEnv para que encuentre tus objetos cargados
+          if (exists(nombre_objeto, envir = .GlobalEnv)) {
+            obj <- get(nombre_objeto, envir = .GlobalEnv)
+            
+            up_total   <- nrow(obj$up_genes)
+            up_pc      <- nrow(obj$up_genes_pc)
+            down_total <- nrow(obj$down_genes)
+            down_pc    <- nrow(obj$down_genes_pc)
+            
+            temp_df <- rbind(
+              # UP
+              data.frame(Cancer = can, Metodo = ifelse(met == "edgeR", "EdgeR", "Voom"),
+                         Umbral = paste0("LFC ", curr_lfc, " | FDR ", curr_fdr),
+                         Regulacion = "Up", Tipo_Gene = "Protein Coding", Conteo = up_pc, Total_Label = up_total, PC_Label = up_pc),
+              data.frame(Cancer = can, Metodo = ifelse(met == "edgeR", "EdgeR", "Voom"),
+                         Umbral = paste0("LFC ", curr_lfc, " | FDR ", curr_fdr),
+                         Regulacion = "Up", Tipo_Gene = "Otros DEGs", Conteo = up_total - up_pc, Total_Label = up_total, PC_Label = up_pc),
+              # DOWN
+              data.frame(Cancer = can, Metodo = ifelse(met == "edgeR", "EdgeR", "Voom"),
+                         Umbral = paste0("LFC ", curr_lfc, " | FDR ", curr_fdr),
+                         Regulacion = "Down", Tipo_Gene = "Protein Coding", Conteo = down_pc, Total_Label = down_total, PC_Label = down_pc),
+              data.frame(Cancer = can, Metodo = ifelse(met == "edgeR", "EdgeR", "Voom"),
+                         Umbral = paste0("LFC ", curr_lfc, " | FDR ", curr_fdr),
+                         Regulacion = "Down", Tipo_Gene = "Otros DEGs", Conteo = down_total - down_pc, Total_Label = down_total, PC_Label = down_pc)
+            )
+            df_general <- rbind(df_general, temp_df)
+          }
+        }
+      }
+    }
+  }
+  
+  #Control de seguridad por si acaso no encuentra ningún objeto
+  if (nrow(df_general) == 0) {
+    stop("No se encontraron objetos con el patrón 'res_metodo_cancer_FDR_LFC' en tu entorno.")
+  }
+  
+  #Generamos el orden de los niveles del eje X de forma dinámica según tus inputs
+  lista_umbrales <- c()
+  for (l in lfc_values) {
+    for (f in fdr_values) {
+      lista_umbrales <- c(lista_umbrales, paste0("LFC ", l, " | FDR ", f))
+    }
+  }
+  df_general$Umbral <- factor(df_general$Umbral, levels = unique(lista_umbrales))
+  
+  #Formateo de posiciones y etiquetas
+  df_general <- df_general %>%
+    mutate(
+      Metodo_num = ifelse(Metodo == "EdgeR", 1, 2),
+      X_pos = ifelse(Regulacion == "Up", Metodo_num - 0.2, Metodo_num + 0.2),
+      Etiqueta = paste0(Total_Label, "\n(", PC_Label, ")")
+    )
+  
+  df_general$Tipo_Gene <- factor(df_general$Tipo_Gene, levels = c("Protein Coding", "Otros DEGs"))
+  
+  #Construcción de la gráfica de ggplot2
+  grafica_degs <- ggplot(df_general, aes(x = X_pos, y = Conteo, fill = Regulacion, alpha = Tipo_Gene)) +
+    geom_col(position = "stack", width = 0.35, color = "black") +
+    
+    geom_text(data = df_general %>% filter(Tipo_Gene == "Protein Coding"), 
+              aes(x = X_pos, y = Total_Label, label = Etiqueta),
+              vjust = -0.15, lineheight = 0.85, size = 2.5, alpha = 1, inherit.aes = FALSE) +
+    
+    scale_fill_manual(values = c("Up" = "firebrick3", "Down" = "dodgerblue3")) +
+    scale_alpha_manual(values = c("Protein Coding" = 1.0, "Otros DEGs" = 0.45)) +
+    
+    scale_x_continuous(breaks = seq_along(metodos), labels = tools::toTitleCase(metodos)) +
+    scale_y_continuous(limits = c(0, max_y), expand = expansion(mult = c(0, 0.02))) +
+    
+    facet_grid(Cancer ~ Umbral) +
+    labs(title = "Distribución de DEGs Totales y Codificantes para Proteína",
+         x = "Método", y = "Número de DEGs", fill = "Regulación", alpha = "Fracción de la Barra") +
+    theme_bw() +
+    theme(strip.text = element_text(face = "bold"), 
+          legend.position = "bottom")
+
+  return(grafica_degs)
+}
+
+
+
+
+
+
+
+
 
 #----------------------------------
 
@@ -900,3 +988,75 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
   
   return(tabla_final)
 }
+
+#__________
+#prueba venn:
+
+# Asegúrate de tener instalada la librería: install.packages("ggvenn")
+generar_venn_comparativo <- function(res_edgeR, res_voom, tipo_cancer="LUAD", base_folder="data") {
+  # 1. Extraemos los IDs de los genes (id_cruce) que son UP y DOWN en edgeR
+  edger_up   <- res_edgeR$up_genes$id_cruce
+  edger_down <- res_edgeR$down_genes$id_cruce
+  
+  # 2. Extraemos los IDs de los genes que son UP y DOWN en voom
+  voom_up    <- res_voom$up_genes$id_cruce
+  voom_down  <- res_voom$down_genes$id_cruce
+  
+  # Listas para el diagrama de Venn - UP
+  lista_up <- list(
+    "edgeR (Up)" = edger_up,
+    "Voom (Up)"  = voom_up
+  )
+  
+  # Listas para el diagrama de Venn - DOWN
+  lista_down <- list(
+    "edgeR (Down)" = edger_down,
+    "Voom (Down)"  = voom_down
+  )
+  
+  # Configuración de colores estéticos (Pasteles pero profesionales)
+  colores <- c("firebrick3", "orange")
+  colores_down <- c("dodgerblue3", "turquoise3")
+  
+  # Graficar UP
+  p_up <- ggvenn(
+    lista_up, 
+    fill_color = colores,
+    stroke_size = 0.5, 
+    set_name_size = 4,   # Tamaño del nombre de los conjuntos (círculos)
+    text_size = 3
+  ) + 
+    labs(title = paste0(tipo_cancer, " - Genes Sobreexpresados (UP)")) +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12)) # <<-- Centrado de título integrado
+  
+  # Graficar DOWN
+  p_down <- ggvenn(
+    lista_down, 
+    fill_color = colores_down,
+    stroke_size = 0.5, 
+    set_name_size = 4,   # Tamaño del nombre de los conjuntos (círculos)
+    text_size = 3
+  ) + 
+    labs(title = paste0(tipo_cancer, " - Genes Infraexpresados (DOWN)")) +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12)) # <<-- Centrado de título integrado
+  
+  # Mostramos los gráficos por pantalla
+  print(p_up)
+  print(p_down)
+  
+  # Guardar los gráficos en la carpeta de resultados correspondientes
+  # (Asumiendo que ya tienes creada la estructura de carpetas)
+  output_dir <- file.path(base_folder, "analysis", "results", "Venn_Diagrams")
+  if(!dir.exists(output_dir)) dir.create(output_dir, recursive=TRUE)
+  
+  ggsave(file.path(output_dir, paste0(tipo_cancer, "_Venn_UP.png")), plot=p_up, width=6, height=5, dpi=300)
+  ggsave(file.path(output_dir, paste0(tipo_cancer, "_Venn_DOWN.png")), plot=p_down, width=6, height=5, dpi=300)
+  
+  # Opcional: Devolver los genes que coinciden exactamente en ambos métodos
+  return(list(
+    shared_up = intersect(edger_up, voom_up),
+    shared_down = intersect(edger_down, voom_down)
+  ))
+}
+
+

@@ -5,7 +5,8 @@ library(here)
 
 source(here("funciones", "Funciones_TFG.R"))
 
-#----------------------------------------------
+#________________________________________________________________________
+
 #BLOQUE 1: DESCARGA DE DATOS TRANSCRIPTÓMICOS, CLÍNICOS Y DE MUTACIONES: 
 
 #Definimos la ruta al directorio en el que se descargarán los datos y lo creamos:
@@ -107,7 +108,7 @@ rm(query_expr_LUAD, query_expr_LUSC,
    query_clinical_LUAD, query_clinical_LUSC,
    mut_LUAD, mut_LUSC)
 gc()
-#---------------------------------------
+#________________________________________________________________________
 #BLOQUE 2: PROCESAMIENTO DE DATOS DE EXPRESIÓN
 
 #Obtenemos los perfiles de expresión definitivos para LUAD y LUSC:
@@ -140,10 +141,8 @@ saveRDS(common_patients_LUSC, "data/common_patients_LUSC.rds")
 rm(expr_LUSC_raw,res_LUSC,common_patients_LUSC)
 gc()
 
-#--------------------------------------------
-#BLOQUE 3: ANÁLISIS DE EXPRESIÓN (EdgeR y Voom) ((INCLUIR RM Y GC))
-#Este bloque tarda bastante en ejecutarse
-#A mí me tarda aproximadamente unas 2h, sacando todos los gráficos asociados
+#________________________________________________________________________
+#BLOQUE 3: ANÁLISIS DE EXPRESIÓN (EdgeR y Voom) 
 
 #Definimos los parámetros de prueba
 cancers <- c("LUAD", "LUSC")
@@ -220,11 +219,68 @@ for (key in names(common_deg_lung)) {
   saveRDS(common_lung, paste0("data/common_lung_deg_", key, ".rds"))
 }
 
-rm(cancers, fdr_values, lfc_values, params, common_deg_lung, common_lung)
+rm(cancers, fdr_values, lfc_values, common_deg_lung, common_lung)
 gc()
 
+#________________________________________________________________________
+#BLOQUE 3.5 (Opcional): Generamos gráfica de distribución de DEGs:
 
-#---------------------------
+# Bucle para cargar TODOS los .rds resultantes del análisis de expresión (Edge R y Voom) en el environment:
+for (i in 1:nrow(params)) {
+  can      <- params$cancer[i]
+  curr_fdr <- params$fdr[i]
+  curr_lfc <- params$lfc[i]
+  
+  #Creamos el sufijo y los nombres de las variables en formato texto
+  suffix <- paste0(can, "_FDR", curr_fdr, "_LFC", curr_lfc)
+  var_edgeR <- paste0("res_edgeR_", suffix)
+  var_voom  <- paste0("res_voom_", suffix)
+  
+  #Construimos la ruta hacia los archivos .rds
+  ruta_edgeR <- paste0("data/res_edgeR_", suffix, ".rds")
+  ruta_voom  <- paste0("data/res_voom_", suffix, ".rds")
+  
+  #Si los archivos existen, los leemos y asignamos su contenido a la variable dinámica
+  if (file.exists(ruta_edgeR)) {
+    assign(var_edgeR, readRDS(ruta_edgeR), envir = .GlobalEnv)
+  }
+  if (file.exists(ruta_voom)) {
+    assign(var_voom, readRDS(ruta_voom), envir = .GlobalEnv)
+  }
+}
+
+rm(params, can, curr_fdr, curr_lfc, i, ruta_edgeR, ruta_voom, suffix, var_edgeR, var_voom)
+gc()
+
+grafica_degs <- plot_deg_distribution()
+print(grafica_degs)
+
+luad_compartidos <- generar_venn_comparativo(
+  res_edgeR = res_edgeR_LUAD_FDR0.01_LFC2, 
+  res_voom = res_voom_LUAD_FDR0.01_LFC1, 
+  tipo_cancer = "LUAD"
+)
+
+lusc_compartidos <- generar_venn_comparativo(
+  res_edgeR = res_edgeR_LUSC_FDR0.01_LFC2, 
+  res_voom = res_voom_LUSC_FDR0.01_LFC2, 
+  tipo_cancer = "LUSC"
+)
+
+objetos_a_borrar <- ls(pattern = "^res_(edgeR|voom)_")
+
+#Si encuentra objetos, los borra en lote y libera memoria RAM
+if (length(objetos_a_borrar) > 0) {
+  rm(list = objetos_a_borrar, envir = .GlobalEnv)
+  cat("\n--- Se han eliminado", length(objetos_a_borrar), "objetos de DEGs del entorno. ---\n")
+} else {
+  cat("\n--- No se encontraron objetos de DEGs para borrar. ---\n")
+}
+
+rm(objetos_a_borrar)
+gc()
+
+#________________________________________________________________________
 #BLOQUE 4: GENERAMOS LOS INPUTS PARA LAS HERRAMIENTAS DE REPOSICIONAMIENTO
 
 #ShinyDeepDR, expresión:
@@ -316,39 +372,41 @@ inputs_ilincs(
 inputs_clue(df_comun_luad, "LUAD")
 inputs_clue(df_comun_lusc, "LUSC")
 
-
-#-------------------------------------
+#________________________________________________________________________
 #BLOQUE 5: TRATAMIENTO DE RESULTADOS DE CLUE QUERY 
 res_LUAD_CMap <- analizar_resultados_clue(
-  ruta_gct = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUAD_Clue_comunes/my_analysis.sig_queryl1k_tool.6a03285d8ed9720013827997/ncs.gct",
+  ruta_gct = "data/analysis/results/resultados_repo/LUAD_Clue_comunes/my_analysis.sig_queryl1k_tool.6a03285d8ed9720013827997/ncs.gct",
   nombre_archivo = "CMap_Resultados_LUAD"
 )
 saveRDS(res_LUAD_CMap,here("data", "candidatos_LUAD_CMap.rds")) 
 
 res_LUSC_CMap <- analizar_resultados_clue(
-  ruta_gct = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUSC_Clue_comunes/my_analysis.sig_queryl1k_tool.6a0330648ed24f001428125f/ncs.gct",
+  ruta_gct = "data/analysis/results/resultados_repo/LUSC_Clue_comunes/my_analysis.sig_queryl1k_tool.6a0330648ed24f001428125f/ncs.gct",
   nombre_archivo = "CMap_Resultados_LUSC"
 )
 saveRDS(res_LUAD_CMap,here("data", "candidatos_LUSC_CMap.rds")) 
 
 
-#----------------------------------------------
+#________________________________________________________________________
 #BLOQUE 6: OBTENER FÁRMACOS CONSENSO 
 
 #Ejecutamos función de fármacos consenso para LUAD:
 farmacos_consenso_LUAD<- obtener_farmacos_consenso(
-  ruta_cdr = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUAD_CDRPipe_Resultados.csv",
-  ruta_cmap = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/CMap_Resultados_Reposicionamiento_LUAD_PRO.csv",
-  ruta_ilincs = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/iLINCS/LUAD/LUAD_exemplar_top100_resultados.xls",
-  ruta_shiny = "data/analysis/results/Resultados reposicionamiento/Solo Voom/ShinyDeepDR/shinyDeepDR_LUAD.csv",
+  ruta_cdr = "data/analysis/results/resultados_repo/LUAD_CDRPipe_Resultados.csv",
+  ruta_cmap = "data/analysis/results/resultados_repo/CMap/CMap_Resultados_LUAD.csv",
+  ruta_ilincs = "data/analysis/results/resultados_repo/iLINCS/LUAD/LUAD_exemplar_top100_resultados.xls",
+  ruta_shiny = "data/analysis/results/resultados_repo/ShinyDeepDR/shinyDeepDR_LUAD.csv",
   archivo_salida = "Farmacos_Consenso_LUAD"
 )
 
 #LUSC:
 farmacos_consenso_LUSC<-obtener_farmacos_consenso(
-  ruta_cdr = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/LUSC_CDRPipe_Resultados.csv",
-  ruta_cmap = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/CMap_Resultados_Reposicionamiento_LUSC_PRO.csv",
-  ruta_ilincs = "data/analysis/results/Resultados reposicionamiento/Voom+EdgeR/iLINCS/LUSC/LUSC_exemplar_top100_resultados.xls",
-  ruta_shiny = "data/analysis/results/Resultados reposicionamiento/Solo Voom/ShinyDeepDR/shinyDeepDR_LUSC.csv",
+  ruta_cdr = "data/analysis/results/resultados_repo/LUSC_CDRPipe_Resultados.csv",
+  ruta_cmap = "data/analysis/results/resultados_repo/CMap/CMap_Resultados_LUSC.csv",
+  ruta_ilincs = "data/analysis/results/resultados_repo/iLINCS/LUSC/LUSC_exemplar_top100_resultados.xls",
+  ruta_shiny = "data/analysis/results/resultados_repo/ShinyDeepDR/shinyDeepDR_LUSC.csv",
   archivo_salida = "Farmacos_Consenso_LUSC"
 )
+
+
+
