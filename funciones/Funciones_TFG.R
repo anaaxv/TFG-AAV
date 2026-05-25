@@ -177,7 +177,7 @@ preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Expe
     
     
     p<-ggplot(pca_df, aes(PC1,PC2,color=group))+
-      geom_point(size=2)+
+      geom_point(size=0.8)+
       labs(title=paste(plot_prefix,"- PCA"),
            x=paste0("PC1 (", var_expl[1],"%)"),
            y=paste0("PC2 (", var_expl[2],"%)"))+
@@ -246,10 +246,21 @@ analysis_edgeR<-function(dgl,
     
     volcano_df$DEG[volcano_df$logFC < -lfc_threshold &
                      volcano_df$FDR<fdr_threshold]<-"Down"
-    top_genes<-volcano_df %>%
-      dplyr::filter(DEG != "Not significant") %>%
+ 
+    volcano_df <- volcano_df %>% 
+      dplyr::filter(gene_type == "protein_coding")
+    
+    top_up <- volcano_df %>%
+      dplyr::filter(DEG == "Up") %>%
       dplyr::arrange(FDR) %>%
-      head(10)
+      head(5)
+    
+    top_down <- volcano_df %>%
+      dplyr::filter(DEG == "Down") %>%
+      dplyr::arrange(FDR) %>%
+      head(5)
+    
+    top_genes <- rbind(top_up, top_down)
     
     n_deg_volcano<-sum(volcano_df$DEG!="Not significant")
     
@@ -275,7 +286,7 @@ analysis_edgeR<-function(dgl,
         seed=42,
         show.legend = FALSE
       )+
-      labs(title=paste(plot_prefix,"- Volcano Plot"),
+      labs(title=paste(plot_prefix,"- Volcano Plot (Protein-Coding)"),
            x="Log2 Fold Change",
            y="-Log10 FDR")+
       theme_minimal()
@@ -361,8 +372,8 @@ analysis_edgeR<-function(dgl,
 complete_edgeR_analysis<-function(expr_data,
                                   group_variable="sample_type",
                                   reference_level="Normal",
-                                  lfc_threshold=1, 
-                                  fdr_threshold=0.05, 
+                                  lfc_threshold=2, 
+                                  fdr_threshold=0.01, 
                                   preprocess_plots=list(boxplot=TRUE, mds=TRUE, pca=TRUE), 
                                   analysis_plots=list(bcv=TRUE, ma=TRUE, volcano=TRUE, hm=TRUE),
                                   base_folder="data",
@@ -443,7 +454,7 @@ analysis_voom<-function(expr_data,
   results$DEG[results$logFC < -lfc_threshold & results$adj.P.Val < fdr_threshold] <- "Down"
   
   #Para ponerlo en el mismo formato que la de edgeR:
-  cols_principales <- c("id_cruce", "gene_name", "logFC", "AveExpr", "P.Value", "adj.P.Val")
+  cols_principales <- c("id_cruce", "gene_name", "gene_type", "logFC", "AveExpr", "P.Value", "adj.P.Val")
   cols_restantes <- setdiff(colnames(results), c(cols_principales, "DEG")) 
   results <- results[, c(cols_principales, cols_restantes, "DEG")] 
   
@@ -466,7 +477,7 @@ analysis_voom<-function(expr_data,
     var_expl <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1) 
     
     p_pca <- ggplot(pca_df, aes(PC1, PC2, color=group)) +
-      geom_point(size=2) +
+      geom_point(size=0.8) +
       labs(title=paste(plot_prefix, "- PCA"),
            x=paste0("PC1 (", var_expl[1], "%)"),
            y=paste0("PC2 (", var_expl[2], "%)")) +
@@ -478,10 +489,20 @@ analysis_voom<-function(expr_data,
   if (plots$volcano){
     volcano_df<-results
     
-    top_genes<-volcano_df %>%
-      dplyr::filter(DEG != "Not significant") %>%
+    volcano_df <- volcano_df %>% 
+      dplyr::filter(gene_type == "protein_coding")
+    
+    top_up <- volcano_df %>%
+      dplyr::filter(DEG == "Up") %>%
       dplyr::arrange(adj.P.Val) %>% 
-      head(10)
+      head(5)
+    
+    top_down <- volcano_df %>%
+      dplyr::filter(DEG == "Down") %>%
+      dplyr::arrange(adj.P.Val) %>% 
+      head(5)
+    
+    top_genes <- rbind(top_up, top_down)
     
     p<-ggplot(volcano_df, aes(x=logFC, y=-log10(adj.P.Val), color=DEG))+ 
       geom_point(alpha=0.6, size=1)+
@@ -502,7 +523,7 @@ analysis_voom<-function(expr_data,
         seed=42,
         show.legend=FALSE
       )+
-      labs(title=paste(plot_prefix,"- Volcano Plot"),
+      labs(title=paste(plot_prefix,"- Volcano Plot (Protein-Coding)"),
            x="Log2 Fold Change",
            y="-Log10 adj.P.Val")+ 
       theme_minimal()
