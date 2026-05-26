@@ -696,6 +696,64 @@ plot_deg_distribution <- function(cancers = c("LUAD", "LUSC"),
 }
 
 
+generar_venn_comparativo <- function(res_edgeR, res_voom, tipo_cancer="LUAD", base_folder="data") {
+  #Extraemos los IDs de los genes (id_cruce) que son UP y DOWN en edgeR
+  edger_up   <- res_edgeR$up_genes$id_cruce
+  edger_down <- res_edgeR$down_genes$id_cruce
+  
+  #Extraemos los IDs de los genes que son UP y DOWN en voom
+  voom_up    <- res_voom$up_genes$id_cruce
+  voom_down  <- res_voom$down_genes$id_cruce
+  
+  lista_up <- list(
+    "edgeR (Up)" = edger_up,
+    "Voom (Up)"  = voom_up
+  )
+  
+  lista_down <- list(
+    "edgeR (Down)" = edger_down,
+    "Voom (Down)"  = voom_down
+  )
+  
+  colores <- c("firebrick3", "orange")
+  colores_down <- c("dodgerblue3", "turquoise3")
+  
+  #Grafica UP
+  p_up <- ggvenn(
+    lista_up, 
+    fill_color = colores,
+    stroke_size = 0.5, 
+    set_name_size = 4,  
+    text_size = 3
+  ) + 
+    labs(title = paste0(tipo_cancer, " - Genes Sobreexpresados (UP)")) +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12))
+  
+  #Grafica DOWN
+  p_down <- ggvenn(
+    lista_down, 
+    fill_color = colores_down,
+    stroke_size = 0.5, 
+    set_name_size = 4,   
+    text_size = 3
+  ) + 
+    labs(title = paste0(tipo_cancer, " - Genes Infraexpresados (DOWN)")) +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12)) 
+  
+  print(p_up)
+  print(p_down)
+  
+  output_dir <- file.path(base_folder, "analysis", "results", "Venn_Diagrams")
+  if(!dir.exists(output_dir)) dir.create(output_dir, recursive=TRUE)
+  
+  ggsave(file.path(output_dir, paste0(tipo_cancer, "_Venn_UP.png")), plot=p_up, width=6, height=5, dpi=300)
+  ggsave(file.path(output_dir, paste0(tipo_cancer, "_Venn_DOWN.png")), plot=p_down, width=6, height=5, dpi=300)
+  
+  return(list(
+    shared_up = intersect(edger_up, voom_up),
+    shared_down = intersect(edger_down, voom_down)
+  ))
+}
 
 
 
@@ -1008,76 +1066,6 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
   cat("Fármacos consenso obtenidos\n")
   
   return(tabla_final)
-}
-
-#__________
-#prueba venn:
-
-# Asegúrate de tener instalada la librería: install.packages("ggvenn")
-generar_venn_comparativo <- function(res_edgeR, res_voom, tipo_cancer="LUAD", base_folder="data") {
-  # 1. Extraemos los IDs de los genes (id_cruce) que son UP y DOWN en edgeR
-  edger_up   <- res_edgeR$up_genes$id_cruce
-  edger_down <- res_edgeR$down_genes$id_cruce
-  
-  # 2. Extraemos los IDs de los genes que son UP y DOWN en voom
-  voom_up    <- res_voom$up_genes$id_cruce
-  voom_down  <- res_voom$down_genes$id_cruce
-  
-  # Listas para el diagrama de Venn - UP
-  lista_up <- list(
-    "edgeR (Up)" = edger_up,
-    "Voom (Up)"  = voom_up
-  )
-  
-  # Listas para el diagrama de Venn - DOWN
-  lista_down <- list(
-    "edgeR (Down)" = edger_down,
-    "Voom (Down)"  = voom_down
-  )
-  
-  # Configuración de colores estéticos (Pasteles pero profesionales)
-  colores <- c("firebrick3", "orange")
-  colores_down <- c("dodgerblue3", "turquoise3")
-  
-  # Graficar UP
-  p_up <- ggvenn(
-    lista_up, 
-    fill_color = colores,
-    stroke_size = 0.5, 
-    set_name_size = 4,   # Tamaño del nombre de los conjuntos (círculos)
-    text_size = 3
-  ) + 
-    labs(title = paste0(tipo_cancer, " - Genes Sobreexpresados (UP)")) +
-    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12)) # <<-- Centrado de título integrado
-  
-  # Graficar DOWN
-  p_down <- ggvenn(
-    lista_down, 
-    fill_color = colores_down,
-    stroke_size = 0.5, 
-    set_name_size = 4,   # Tamaño del nombre de los conjuntos (círculos)
-    text_size = 3
-  ) + 
-    labs(title = paste0(tipo_cancer, " - Genes Infraexpresados (DOWN)")) +
-    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12)) # <<-- Centrado de título integrado
-  
-  # Mostramos los gráficos por pantalla
-  print(p_up)
-  print(p_down)
-  
-  # Guardar los gráficos en la carpeta de resultados correspondientes
-  # (Asumiendo que ya tienes creada la estructura de carpetas)
-  output_dir <- file.path(base_folder, "analysis", "results", "Venn_Diagrams")
-  if(!dir.exists(output_dir)) dir.create(output_dir, recursive=TRUE)
-  
-  ggsave(file.path(output_dir, paste0(tipo_cancer, "_Venn_UP.png")), plot=p_up, width=6, height=5, dpi=300)
-  ggsave(file.path(output_dir, paste0(tipo_cancer, "_Venn_DOWN.png")), plot=p_down, width=6, height=5, dpi=300)
-  
-  # Opcional: Devolver los genes que coinciden exactamente en ambos métodos
-  return(list(
-    shared_up = intersect(edger_up, voom_up),
-    shared_down = intersect(edger_down, voom_down)
-  ))
 }
 
 
