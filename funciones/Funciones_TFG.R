@@ -757,10 +757,6 @@ generar_venn_comparativo <- function(res_edgeR, res_voom, tipo_cancer="LUAD", ba
 
 
 
-
-
-
-
 #----------------------------------
 
 #Funciones para generar los inputs de reposicionamiento:
@@ -1012,14 +1008,14 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
     left_join(res_ilincs, by = c("Farmaco" = "drug_lower")) %>%
     left_join(res_shiny, by = c("Farmaco" = "drug_lower"))
   
-  #Sustituir NAs en las columnas de presencia (del 2 al 5)
+  #Sustituir NAs en las columnas de presencia (2 a 5)
   tabla_final[, 2:5][is.na(tabla_final[, 2:5])] <- 0
   
   
   #Cálculo de totales y orden final:
   tabla_final <- tabla_final %>%
     mutate(Total_Metodos = CDRpipe + CMap + iLINCS + ShinyDeepDR) %>%
-    # Prioridad: 1º Más métodos, 2º Mejor reversión en iLINCS, 3º Mejor IC50 en Shiny
+    #Prioridad: 1º Más métodos, 2º Mejor reversión en iLINCS, 3º Mejor IC50 en Shiny
     arrange(desc(Total_Metodos), Score_iLINCS, IC50_Shiny)
   
   ruta_final<-file.path(folder, paste0(archivo_salida, ".csv"))
@@ -1030,7 +1026,7 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
   
   #GRÁFICOS:
   
-  # 1. UpSet
+  #UpSet
   listas_interseccion <- list(
     CDRpipe     = tabla_final$Farmaco[tabla_final$CDRpipe == 1],
     CMap        = tabla_final$Farmaco[tabla_final$CMap == 1],
@@ -1038,7 +1034,6 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
     ShinyDeepDR = tabla_final$Farmaco[tabla_final$ShinyDeepDR == 1]
   )
   
-  # Imprimir UpSet (al ser un plot de base R / grid, se lanza directamente)
   print(upset(fromList(listas_interseccion), 
               order.by = "freq", 
               main.bar.color = "#2c3e50", 
@@ -1047,7 +1042,7 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
               text.scale = 1.2,
               set_size.show = FALSE))
   
-  # 2. Boxplots combinados con patchwork
+  #Boxplots:
   p1 <- ggplot(tabla_final, aes(x = as.factor(Total_Metodos), y = Score_iLINCS, fill = as.factor(Total_Metodos))) +
     geom_boxplot(alpha = 0.7, outlier.color = "red") +
     theme_light() +
@@ -1060,7 +1055,6 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
     labs(x = "Nivel de Consenso", y = "IC50 Shiny (log uM)", title = "IC50 por Consenso") +
     theme(legend.position = "none")
   
-  # Mostrar los boxplots
   print(p1 + p2)
   
   cat("Fármacos consenso obtenidos\n")
