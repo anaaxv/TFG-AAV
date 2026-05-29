@@ -177,7 +177,7 @@ preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Expe
     
     
     p<-ggplot(pca_df, aes(PC1,PC2,color=group))+
-      geom_point(size=2)+
+      geom_point(size=0.8)+
       labs(title=paste(plot_prefix,"- PCA"),
            x=paste0("PC1 (", var_expl[1],"%)"),
            y=paste0("PC2 (", var_expl[2],"%)"))+
@@ -246,10 +246,21 @@ analysis_edgeR<-function(dgl,
     
     volcano_df$DEG[volcano_df$logFC < -lfc_threshold &
                      volcano_df$FDR<fdr_threshold]<-"Down"
-    top_genes<-volcano_df %>%
-      dplyr::filter(DEG != "Not significant") %>%
+ 
+    volcano_df <- volcano_df %>% 
+      dplyr::filter(gene_type == "protein_coding")
+    
+    top_up <- volcano_df %>%
+      dplyr::filter(DEG == "Up") %>%
       dplyr::arrange(FDR) %>%
-      head(10)
+      head(5)
+    
+    top_down <- volcano_df %>%
+      dplyr::filter(DEG == "Down") %>%
+      dplyr::arrange(FDR) %>%
+      head(5)
+    
+    top_genes <- rbind(top_up, top_down)
     
     n_deg_volcano<-sum(volcano_df$DEG!="Not significant")
     
@@ -275,7 +286,7 @@ analysis_edgeR<-function(dgl,
         seed=42,
         show.legend = FALSE
       )+
-      labs(title=paste(plot_prefix,"- Volcano Plot"),
+      labs(title=paste(plot_prefix,"- Volcano Plot (Protein-Coding)"),
            x="Log2 Fold Change",
            y="-Log10 FDR")+
       theme_minimal()
@@ -361,8 +372,8 @@ analysis_edgeR<-function(dgl,
 complete_edgeR_analysis<-function(expr_data,
                                   group_variable="sample_type",
                                   reference_level="Normal",
-                                  lfc_threshold=1, 
-                                  fdr_threshold=0.05, 
+                                  lfc_threshold=2, 
+                                  fdr_threshold=0.01, 
                                   preprocess_plots=list(boxplot=TRUE, mds=TRUE, pca=TRUE), 
                                   analysis_plots=list(bcv=TRUE, ma=TRUE, volcano=TRUE, hm=TRUE),
                                   base_folder="data",
@@ -443,7 +454,7 @@ analysis_voom<-function(expr_data,
   results$DEG[results$logFC < -lfc_threshold & results$adj.P.Val < fdr_threshold] <- "Down"
   
   #Para ponerlo en el mismo formato que la de edgeR:
-  cols_principales <- c("id_cruce", "gene_name", "logFC", "AveExpr", "P.Value", "adj.P.Val")
+  cols_principales <- c("id_cruce", "gene_name", "gene_type", "logFC", "AveExpr", "P.Value", "adj.P.Val")
   cols_restantes <- setdiff(colnames(results), c(cols_principales, "DEG")) 
   results <- results[, c(cols_principales, cols_restantes, "DEG")] 
   
@@ -466,7 +477,7 @@ analysis_voom<-function(expr_data,
     var_expl <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1) 
     
     p_pca <- ggplot(pca_df, aes(PC1, PC2, color=group)) +
-      geom_point(size=2) +
+      geom_point(size=0.8) +
       labs(title=paste(plot_prefix, "- PCA"),
            x=paste0("PC1 (", var_expl[1], "%)"),
            y=paste0("PC2 (", var_expl[2], "%)")) +
@@ -478,10 +489,20 @@ analysis_voom<-function(expr_data,
   if (plots$volcano){
     volcano_df<-results
     
-    top_genes<-volcano_df %>%
-      dplyr::filter(DEG != "Not significant") %>%
+    volcano_df <- volcano_df %>% 
+      dplyr::filter(gene_type == "protein_coding")
+    
+    top_up <- volcano_df %>%
+      dplyr::filter(DEG == "Up") %>%
       dplyr::arrange(adj.P.Val) %>% 
-      head(10)
+      head(5)
+    
+    top_down <- volcano_df %>%
+      dplyr::filter(DEG == "Down") %>%
+      dplyr::arrange(adj.P.Val) %>% 
+      head(5)
+    
+    top_genes <- rbind(top_up, top_down)
     
     p<-ggplot(volcano_df, aes(x=logFC, y=-log10(adj.P.Val), color=DEG))+ 
       geom_point(alpha=0.6, size=1)+
@@ -502,7 +523,7 @@ analysis_voom<-function(expr_data,
         seed=42,
         show.legend=FALSE
       )+
-      labs(title=paste(plot_prefix,"- Volcano Plot"),
+      labs(title=paste(plot_prefix,"- Volcano Plot (Protein-Coding)"),
            x="Log2 Fold Change",
            y="-Log10 adj.P.Val")+ 
       theme_minimal()
@@ -675,10 +696,64 @@ plot_deg_distribution <- function(cancers = c("LUAD", "LUSC"),
 }
 
 
-
-
-
-
+generar_venn_comparativo <- function(res_edgeR, res_voom, tipo_cancer="LUAD", base_folder="data") {
+  #Extraemos los IDs de los genes (id_cruce) que son UP y DOWN en edgeR
+  edger_up   <- res_edgeR$up_genes$id_cruce
+  edger_down <- res_edgeR$down_genes$id_cruce
+  
+  #Extraemos los IDs de los genes que son UP y DOWN en voom
+  voom_up    <- res_voom$up_genes$id_cruce
+  voom_down  <- res_voom$down_genes$id_cruce
+  
+  lista_up <- list(
+    "edgeR (Up)" = edger_up,
+    "Voom (Up)"  = voom_up
+  )
+  
+  lista_down <- list(
+    "edgeR (Down)" = edger_down,
+    "Voom (Down)"  = voom_down
+  )
+  
+  colores <- c("firebrick3", "orange")
+  colores_down <- c("dodgerblue3", "turquoise3")
+  
+  #Grafica UP
+  p_up <- ggvenn(
+    lista_up, 
+    fill_color = colores,
+    stroke_size = 0.5, 
+    set_name_size = 4,  
+    text_size = 3
+  ) + 
+    labs(title = paste0(tipo_cancer, " - Genes Sobreexpresados (UP)")) +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12))
+  
+  #Grafica DOWN
+  p_down <- ggvenn(
+    lista_down, 
+    fill_color = colores_down,
+    stroke_size = 0.5, 
+    set_name_size = 4,   
+    text_size = 3
+  ) + 
+    labs(title = paste0(tipo_cancer, " - Genes Infraexpresados (DOWN)")) +
+    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12)) 
+  
+  print(p_up)
+  print(p_down)
+  
+  output_dir <- file.path(base_folder, "analysis", "results", "Venn_Diagrams")
+  if(!dir.exists(output_dir)) dir.create(output_dir, recursive=TRUE)
+  
+  ggsave(file.path(output_dir, paste0(tipo_cancer, "_Venn_UP.png")), plot=p_up, width=6, height=5, dpi=300)
+  ggsave(file.path(output_dir, paste0(tipo_cancer, "_Venn_DOWN.png")), plot=p_down, width=6, height=5, dpi=300)
+  
+  return(list(
+    shared_up = intersect(edger_up, voom_up),
+    shared_down = intersect(edger_down, voom_down)
+  ))
+}
 
 
 
@@ -933,14 +1008,14 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
     left_join(res_ilincs, by = c("Farmaco" = "drug_lower")) %>%
     left_join(res_shiny, by = c("Farmaco" = "drug_lower"))
   
-  #Sustituir NAs en las columnas de presencia (del 2 al 5)
+  #Sustituir NAs en las columnas de presencia (2 a 5)
   tabla_final[, 2:5][is.na(tabla_final[, 2:5])] <- 0
   
   
   #Cálculo de totales y orden final:
   tabla_final <- tabla_final %>%
     mutate(Total_Metodos = CDRpipe + CMap + iLINCS + ShinyDeepDR) %>%
-    # Prioridad: 1º Más métodos, 2º Mejor reversión en iLINCS, 3º Mejor IC50 en Shiny
+    #Prioridad: 1º Más métodos, 2º Mejor reversión en iLINCS, 3º Mejor IC50 en Shiny
     arrange(desc(Total_Metodos), Score_iLINCS, IC50_Shiny)
   
   ruta_final<-file.path(folder, paste0(archivo_salida, ".csv"))
@@ -951,7 +1026,7 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
   
   #GRÁFICOS:
   
-  # 1. UpSet
+  #UpSet
   listas_interseccion <- list(
     CDRpipe     = tabla_final$Farmaco[tabla_final$CDRpipe == 1],
     CMap        = tabla_final$Farmaco[tabla_final$CMap == 1],
@@ -959,7 +1034,6 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
     ShinyDeepDR = tabla_final$Farmaco[tabla_final$ShinyDeepDR == 1]
   )
   
-  # Imprimir UpSet (al ser un plot de base R / grid, se lanza directamente)
   print(upset(fromList(listas_interseccion), 
               order.by = "freq", 
               main.bar.color = "#2c3e50", 
@@ -968,7 +1042,7 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
               text.scale = 1.2,
               set_size.show = FALSE))
   
-  # 2. Boxplots combinados con patchwork
+  #Boxplots:
   p1 <- ggplot(tabla_final, aes(x = as.factor(Total_Metodos), y = Score_iLINCS, fill = as.factor(Total_Metodos))) +
     geom_boxplot(alpha = 0.7, outlier.color = "red") +
     theme_light() +
@@ -981,82 +1055,11 @@ obtener_farmacos_consenso <- function(ruta_cdr, ruta_cmap, ruta_ilincs, ruta_shi
     labs(x = "Nivel de Consenso", y = "IC50 Shiny (log uM)", title = "IC50 por Consenso") +
     theme(legend.position = "none")
   
-  # Mostrar los boxplots
   print(p1 + p2)
   
   cat("Fármacos consenso obtenidos\n")
   
   return(tabla_final)
-}
-
-#__________
-#prueba venn:
-
-# Asegúrate de tener instalada la librería: install.packages("ggvenn")
-generar_venn_comparativo <- function(res_edgeR, res_voom, tipo_cancer="LUAD", base_folder="data") {
-  # 1. Extraemos los IDs de los genes (id_cruce) que son UP y DOWN en edgeR
-  edger_up   <- res_edgeR$up_genes$id_cruce
-  edger_down <- res_edgeR$down_genes$id_cruce
-  
-  # 2. Extraemos los IDs de los genes que son UP y DOWN en voom
-  voom_up    <- res_voom$up_genes$id_cruce
-  voom_down  <- res_voom$down_genes$id_cruce
-  
-  # Listas para el diagrama de Venn - UP
-  lista_up <- list(
-    "edgeR (Up)" = edger_up,
-    "Voom (Up)"  = voom_up
-  )
-  
-  # Listas para el diagrama de Venn - DOWN
-  lista_down <- list(
-    "edgeR (Down)" = edger_down,
-    "Voom (Down)"  = voom_down
-  )
-  
-  # Configuración de colores estéticos (Pasteles pero profesionales)
-  colores <- c("firebrick3", "orange")
-  colores_down <- c("dodgerblue3", "turquoise3")
-  
-  # Graficar UP
-  p_up <- ggvenn(
-    lista_up, 
-    fill_color = colores,
-    stroke_size = 0.5, 
-    set_name_size = 4,   # Tamaño del nombre de los conjuntos (círculos)
-    text_size = 3
-  ) + 
-    labs(title = paste0(tipo_cancer, " - Genes Sobreexpresados (UP)")) +
-    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12)) # <<-- Centrado de título integrado
-  
-  # Graficar DOWN
-  p_down <- ggvenn(
-    lista_down, 
-    fill_color = colores_down,
-    stroke_size = 0.5, 
-    set_name_size = 4,   # Tamaño del nombre de los conjuntos (círculos)
-    text_size = 3
-  ) + 
-    labs(title = paste0(tipo_cancer, " - Genes Infraexpresados (DOWN)")) +
-    theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12)) # <<-- Centrado de título integrado
-  
-  # Mostramos los gráficos por pantalla
-  print(p_up)
-  print(p_down)
-  
-  # Guardar los gráficos en la carpeta de resultados correspondientes
-  # (Asumiendo que ya tienes creada la estructura de carpetas)
-  output_dir <- file.path(base_folder, "analysis", "results", "Venn_Diagrams")
-  if(!dir.exists(output_dir)) dir.create(output_dir, recursive=TRUE)
-  
-  ggsave(file.path(output_dir, paste0(tipo_cancer, "_Venn_UP.png")), plot=p_up, width=6, height=5, dpi=300)
-  ggsave(file.path(output_dir, paste0(tipo_cancer, "_Venn_DOWN.png")), plot=p_down, width=6, height=5, dpi=300)
-  
-  # Opcional: Devolver los genes que coinciden exactamente en ambos métodos
-  return(list(
-    shared_up = intersect(edger_up, voom_up),
-    shared_down = intersect(edger_down, voom_down)
-  ))
 }
 
 

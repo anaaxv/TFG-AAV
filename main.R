@@ -9,15 +9,14 @@ source(here("funciones", "Funciones_TFG.R"))
 
 #BLOQUE 1: DESCARGA DE DATOS TRANSCRIPTÓMICOS, CLÍNICOS Y DE MUTACIONES: 
 
-#Definimos la ruta al directorio en el que se descargarán los datos y lo creamos:
+#Definimos la ruta al directorio en el que se descargarán los datos y lo creamos si no existe ya:
 dir_gdc <- here("TCGA","GDCdata") 
 
 if (!dir.exists(dir_gdc)){
   dir.create(dir_gdc, recursive = TRUE) #Con recursive true nos aseguramos de que se creen las carpetas intermediarias que puedan faltar
 }
 
-#Descargamos datos de expresión de LUAD y LUSC
-#y generamos datatables de ambos que podremos guardar para consulta:
+#Descargamos datos de expresión de LUAD y LUSC y generamos datatables de ambos que podremos guardar para consulta:
 
 query_expr_LUAD<-GDCquery(
   project="TCGA-LUAD",
@@ -108,6 +107,7 @@ rm(query_expr_LUAD, query_expr_LUSC,
    query_clinical_LUAD, query_clinical_LUSC,
    mut_LUAD, mut_LUSC)
 gc()
+
 #________________________________________________________________________
 #BLOQUE 2: PROCESAMIENTO DE DATOS DE EXPRESIÓN
 
@@ -144,12 +144,12 @@ gc()
 #________________________________________________________________________
 #BLOQUE 3: ANÁLISIS DE EXPRESIÓN (EdgeR y Voom) 
 
-#Definimos los parámetros de prueba
+#Definimos los parámetros
 cancers <- c("LUAD", "LUSC")
 fdr_values <- c(0.01, 0.05)
 lfc_values <- c(1, 2)
 
-#Creamos todas las combinaciones posibles (8 en total: 2 cánceres * 2 FDR * 2 LFC)
+#Creamos todas las combinaciones posibles (en este caso 8 en total: 2 cánceres * 2 FDR * 2 LFC)
 params <- expand.grid(cancer = cancers, fdr = fdr_values, lfc = lfc_values, stringsAsFactors = FALSE)
 
 #Lista para almacenar los DEGs comunes de LUAD y LUSC, por combinación de umbrales
@@ -158,17 +158,17 @@ common_deg_lung <- list()
 #Iniciamos el bucle
 for (i in 1:nrow(params)) {
   
-  # Extraer parámetros actuales
+  #Extraemos parámetros actuales
   can <- params$cancer[i]
   curr_fdr <- params$fdr[i]
   curr_lfc <- params$lfc[i]
   
   cat("\n--- Procesando:", can, "| FDR:", curr_fdr, "| LFC:", curr_lfc, "---\n")
   
-  # Seleccionar el objeto de expresión correspondiente:
+  #Seleccionamos el objeto de expresión correspondiente (que estará cargado en el entorno de trabajo):
   expr_data <- get(paste0("expr_", can, "_def"))
   
-  # A.Análisis EdgeR
+  #1)Análisis EdgeR
   res_edgeR <- complete_edgeR_analysis(
     expr_data,
     lfc_threshold = curr_lfc,
@@ -176,7 +176,7 @@ for (i in 1:nrow(params)) {
     plot_prefix = paste(can, "- EdgeR")
   )
   
-  # B.Análisis Voom 
+  #2)Análisis Voom 
   res_voom <- analysis_voom(
     expr_data,
     lfc_threshold = curr_lfc,
@@ -184,7 +184,7 @@ for (i in 1:nrow(params)) {
     plot_prefix = paste(can, "- Voom")
   )
   
-  # C.Intersección por cáncer (Common DEGs del cáncer actual)
+  #3)Intersección por cáncer (Common DEGs del cáncer actual)
   common_can <- intersect(
     res_edgeR$significant$id_cruce,
     res_voom$significant$id_cruce
@@ -209,7 +209,7 @@ gc()
 cat("\n--- Calculando Intersecciones Finales (Common Lung) ---\n")
 
 for (key in names(common_deg_lung)) {
-  # Intersectamos lo que hay en LUAD con lo que hay en LUSC para este umbral
+  #Intersectamos lo que hay en LUAD con lo que hay en LUSC para este umbral
   common_lung <- intersect(
     common_deg_lung[[key]][["LUAD"]],
     common_deg_lung[[key]][["LUSC"]]
@@ -225,7 +225,7 @@ gc()
 #________________________________________________________________________
 #BLOQUE 3.5 (Opcional): Generamos gráfica de distribución de DEGs:
 
-# Bucle para cargar TODOS los .rds resultantes del análisis de expresión (Edge R y Voom) en el environment:
+#Bucle para cargar TODOS los .rds resultantes del análisis de expresión (Edge R y Voom) en el environment:
 for (i in 1:nrow(params)) {
   can      <- params$cancer[i]
   curr_fdr <- params$fdr[i]
@@ -374,6 +374,8 @@ inputs_clue(df_comun_lusc, "LUSC")
 
 #________________________________________________________________________
 #BLOQUE 5: TRATAMIENTO DE RESULTADOS DE CLUE QUERY 
+
+#Indicamos la ruta en la que hayamos guardado los resultados de Clue Query:
 res_LUAD_CMap <- analizar_resultados_clue(
   ruta_gct = "data/analysis/results/resultados_repo/LUAD_Clue_comunes/my_analysis.sig_queryl1k_tool.6a03285d8ed9720013827997/ncs.gct",
   nombre_archivo = "CMap_Resultados_LUAD"
@@ -390,7 +392,7 @@ saveRDS(res_LUAD_CMap,here("data", "candidatos_LUSC_CMap.rds"))
 #________________________________________________________________________
 #BLOQUE 6: OBTENER FÁRMACOS CONSENSO 
 
-#Ejecutamos función de fármacos consenso para LUAD:
+#Ejecutamos función de fármacos consenso para LUAD indicando las rutas en las que hayamos guardado los resultados de las herramientas de reposicionamiento:
 farmacos_consenso_LUAD<- obtener_farmacos_consenso(
   ruta_cdr = "data/analysis/results/resultados_repo/LUAD_CDRPipe_Resultados.csv",
   ruta_cmap = "data/analysis/results/resultados_repo/CMap/CMap_Resultados_LUAD.csv",
@@ -407,6 +409,7 @@ farmacos_consenso_LUSC<-obtener_farmacos_consenso(
   ruta_shiny = "data/analysis/results/resultados_repo/ShinyDeepDR/shinyDeepDR_LUSC.csv",
   archivo_salida = "Farmacos_Consenso_LUSC"
 )
+
 
 
 
