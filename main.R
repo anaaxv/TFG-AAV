@@ -18,77 +18,67 @@ if (!dir.exists(dir_gdc)){
 
 #Descargamos datos de expresión de LUAD y LUSC y generamos datatables de ambos que podremos guardar para consulta:
 
-query_expr_LUAD<-GDCquery(
-  project="TCGA-LUAD",
-  data.category="Transcriptome Profiling",
-  data.type="Gene Expression Quantification",
-  workflow.type="STAR - Counts"
-)
+query_expr_LUAD<-GDCquery(project="TCGA-LUAD",
+                          data.category="Transcriptome Profiling",
+                          data.type="Gene Expression Quantification",
+                          workflow.type="STAR - Counts")
+
 GDCdownload(query_expr_LUAD, directory = dir_gdc)
 expr_LUAD_raw<-GDCprepare(query_expr_LUAD, directory = dir_gdc)
 
-datatable(
-  as.data.frame(colData(expr_LUAD_raw)),
-  options = list(scrollX = TRUE, pageLength = 5),
-  rownames = FALSE
-)
+datatable(as.data.frame(colData(expr_LUAD_raw)),
+          options = list(scrollX = TRUE, pageLength = 5),
+          rownames = FALSE)
 
-query_expr_LUSC<-GDCquery(
-  project="TCGA-LUSC",
-  data.category="Transcriptome Profiling",
-  data.type="Gene Expression Quantification",
-  workflow.type="STAR - Counts"
-)
+query_expr_LUSC<-GDCquery(project="TCGA-LUSC",
+                          data.category="Transcriptome Profiling",
+                          data.type="Gene Expression Quantification",
+                          workflow.type="STAR - Counts")
+
 GDCdownload(query_expr_LUSC, directory = dir_gdc)
 expr_LUSC_raw<-GDCprepare(query_expr_LUSC, directory = dir_gdc)
 
-datatable(
-  as.data.frame(colData(expr_LUSC_raw)),
-  options = list(scrollX = TRUE, pageLength = 5),
-  rownames = FALSE
-)
+datatable(as.data.frame(colData(expr_LUSC_raw)),
+          options = list(scrollX = TRUE, pageLength = 5),
+          rownames = FALSE)
 
 
 #Descargamos datos de mutación de LUAD y LUSC:
 
-query_mut_LUAD<-GDCquery(
-  project="TCGA-LUAD",
-  data.category="Simple Nucleotide Variation",
-  data.type="Masked Somatic Mutation",
-  workflow.type="Aliquot Ensemble Somatic Variant Merging and Masking",
-  access="open"
-)
+query_mut_LUAD<-GDCquery(project="TCGA-LUAD",
+                         data.category="Simple Nucleotide Variation",
+                         data.type="Masked Somatic Mutation",
+                         workflow.type="Aliquot Ensemble Somatic Variant Merging and Masking",
+                         access="open")
+
 GDCdownload(query_mut_LUAD, directory = dir_gdc)
 mut_LUAD<-GDCprepare(query_mut_LUAD, directory = dir_gdc)
 
-query_mut_LUSC<-GDCquery(
-  project="TCGA-LUSC",
-  data.category="Simple Nucleotide Variation",
-  data.type="Masked Somatic Mutation",
-  workflow.type="Aliquot Ensemble Somatic Variant Merging and Masking",
-  access="open"
-)
+query_mut_LUSC<-GDCquery(project="TCGA-LUSC",
+                         data.category="Simple Nucleotide Variation",
+                         data.type="Masked Somatic Mutation",
+                         workflow.type="Aliquot Ensemble Somatic Variant Merging and Masking",
+                         access="open")
+
 GDCdownload(query_mut_LUSC, directory = dir_gdc)
 mut_LUSC<-GDCprepare(query_mut_LUSC, directory = dir_gdc)
 
 
 #Descargamos los datos clínicos de LUAD y LUSC:
 
-query_clinical_LUAD<-GDCquery(
-  project="TCGA-LUAD",
-  data.category="Clinical",
-  data.type="Clinical Supplement",
-  data.format="BCR Biotab"
-)
+query_clinical_LUAD<-GDCquery(project="TCGA-LUAD",
+                              data.category="Clinical",
+                              data.type="Clinical Supplement",
+                              data.format="BCR Biotab")
+
 GDCdownload(query_clinical_LUAD, directory = dir_gdc)
 clinical_LUAD_BCRtab<-GDCprepare(query_clinical_LUAD, directory = dir_gdc)
 
-query_clinical_LUSC<-GDCquery(
-  project="TCGA-LUSC",
-  data.category="Clinical",
-  data.type="Clinical Supplement",
-  data.format="BCR Biotab"
-)
+query_clinical_LUSC<-GDCquery(project="TCGA-LUSC",
+                              data.category="Clinical",
+                              data.type="Clinical Supplement",
+                              data.format="BCR Biotab")
+
 GDCdownload(query_clinical_LUSC, directory = dir_gdc)
 clinical_LUSC_BCRtab<-GDCprepare(query_clinical_LUSC, directory = dir_gdc)
 
@@ -112,10 +102,8 @@ gc()
 #BLOQUE 2: PROCESAMIENTO DE DATOS DE EXPRESIÓN
 
 #Obtenemos los perfiles de expresión definitivos para LUAD y LUSC:
-res_LUAD<-procesar_expr(
-  expr=expr_LUAD_raw,
-  clinical_patients=clinical_LUAD_BCRtab$clinical_patient_luad$bcr_patient_barcode
-)
+res_LUAD<-pretratamiento_expr(expr=expr_LUAD_raw,
+  clinical_patients=clinical_LUAD_BCRtab$clinical_patient_luad$bcr_patient_barcode)
 
 expr_LUAD_def<-res_LUAD$expr_def
 common_patients_LUAD<-res_LUAD$common_patients
@@ -127,10 +115,8 @@ rm(expr_LUAD_raw, res_LUAD, common_patients_LUAD)
 gc()
 
 #Hacemos lo mismo para LUSC:
-res_LUSC<-procesar_expr(
-  expr=expr_LUSC_raw,
-  clinical_patients=clinical_LUSC_BCRtab$clinical_patient_lusc$bcr_patient_barcode
-)
+res_LUSC<-pretratamiento_expr(expr=expr_LUSC_raw,
+  clinical_patients=clinical_LUSC_BCRtab$clinical_patient_lusc$bcr_patient_barcode)
 
 expr_LUSC_def<-res_LUSC$expr_def
 common_patients_LUSC<-res_LUSC$common_patients
@@ -169,26 +155,20 @@ for (i in 1:nrow(params)) {
   expr_data <- get(paste0("expr_", can, "_def"))
   
   #1)Análisis EdgeR
-  res_edgeR <- complete_edgeR_analysis(
-    expr_data,
-    lfc_threshold = curr_lfc,
-    fdr_threshold = curr_fdr,
-    plot_prefix = paste(can, "- EdgeR")
-  )
+  res_edgeR <- complete_edgeR_analysis(expr_data,
+                                       lfc_threshold = curr_lfc,
+                                       fdr_threshold = curr_fdr,
+                                       plot_prefix = paste(can, "- EdgeR"))
   
   #2)Análisis Voom 
-  res_voom <- analysis_voom(
-    expr_data,
-    lfc_threshold = curr_lfc,
-    fdr_threshold = curr_fdr,
-    plot_prefix = paste(can, "- Voom")
-  )
+  res_voom <- analysis_voom(expr_data,
+                            lfc_threshold = curr_lfc,
+                            fdr_threshold = curr_fdr,
+                            plot_prefix = paste(can, "- Voom"))
   
   #3)Intersección por cáncer (Common DEGs del cáncer actual)
-  common_can <- intersect(
-    res_edgeR$significant$id_cruce,
-    res_voom$significant$id_cruce
-  )
+  common_can <- intersect(res_edgeR$significant$id_cruce,
+                          res_voom$significant$id_cruce)
   
   #Guardamos:
   suffix <- paste0(can, "_FDR", curr_fdr, "_LFC", curr_lfc)
@@ -210,10 +190,8 @@ cat("\n--- Calculando Intersecciones Finales (Common Lung) ---\n")
 
 for (key in names(common_deg_lung)) {
   #Intersectamos lo que hay en LUAD con lo que hay en LUSC para este umbral
-  common_lung <- intersect(
-    common_deg_lung[[key]][["LUAD"]],
-    common_deg_lung[[key]][["LUSC"]]
-  )
+  common_lung <- intersect(common_deg_lung[[key]][["LUAD"]],
+                           common_deg_lung[[key]][["LUSC"]])
   
   cat("Umbral", key, "- Genes comunes totales:", length(common_lung), "\n")
   saveRDS(common_lung, paste0("data/common_lung_deg_", key, ".rds"))
@@ -284,15 +262,9 @@ gc()
 #BLOQUE 4: GENERAMOS LOS INPUTS PARA LAS HERRAMIENTAS DE REPOSICIONAMIENTO
 
 #ShinyDeepDR, expresión:
-inputs_shinyDeepDR(
-  expr_data = expr_LUAD_def,
-  file_name="input_ShinyDeepDR_LUAD"
-)
+inputs_shinyDeepDR(expr_data = expr_LUAD_def, file_name="input_ShinyDeepDR_LUAD")
 
-inputs_shinyDeepDR(
-  expr_data = expr_LUSC_def,
-  file_name="input_ShinyDeepDR_LUSC"
-)
+inputs_shinyDeepDR(expr_data = expr_LUSC_def, file_name="input_ShinyDeepDR_LUSC")
 
 rm(expr_LUAD_def,expr_LUSC_def)
 gc()
@@ -308,9 +280,7 @@ maf_shinyDeepDR_LUAD <- mut_LUAD_raw %>%
 # Guardamos el MAF "unificado":
 write.table(maf_shinyDeepDR_LUAD, 
             file = "data/analysis/inputs_repo/ShinyDeepDR/LUAD_mutations.maf", 
-            sep = "\t", 
-            quote = FALSE, 
-            row.names = FALSE)
+            sep = "\t", quote = FALSE, row.names = FALSE)
 
 rm(mut_LUAD_raw)
 gc()
@@ -324,9 +294,7 @@ maf_shinyDeepDR_LUSC <- mut_LUSC_raw %>%
 
 write.table(maf_shinyDeepDR_LUSC, 
             file = "data/analysis/inputs_repo/ShinyDeepDR/LUSC_mutations.maf", 
-            sep = "\t", 
-            quote = FALSE, 
-            row.names = FALSE)
+            sep = "\t", quote = FALSE, row.names = FALSE)
 
 rm(mut_LUSC_raw)
 gc()
@@ -341,32 +309,22 @@ common_deg_LUSC<-readRDS("data/common_deg_LUSC_FDR0.01_LFC2.rds")
 df_comun_luad <- res_LUAD_voom$significant %>%
   filter(id_cruce %in% common_deg_LUAD)
 
-input_cdr_luad <- inputs_cdrpipe(
-  df_degs = df_comun_luad, 
-  file_name = "input_CDRpipe_LUAD"
-)
+input_cdr_luad <- inputs_cdrpipe(df_degs = df_comun_luad, 
+                                 file_name = "input_CDRpipe_LUAD")
 
 df_comun_lusc <- res_LUSC_voom$significant %>%
   filter(id_cruce %in% common_deg_LUSC)
 
-input_cdr_lusc <- inputs_cdrpipe(
-  df_degs = df_comun_lusc, 
-  file_name = "input_CDRpipe_LUSC"
-)
+input_cdr_lusc <- inputs_cdrpipe(df_degs = df_comun_lusc, 
+                                 file_name = "input_CDRpipe_LUSC")
 
 rm(res_LUAD_voom, res_LUSC_voom, common_deg_LUAD, common_deg_LUSC)
 gc()
 
 #iLINCS:
-inputs_ilincs(
-  df_cdr = input_cdr_luad, 
-  file_name = "input_iLINCS_LUAD"
-)
+inputs_ilincs(df_cdr = input_cdr_luad, file_name = "input_iLINCS_LUAD")
 
-inputs_ilincs(
-  df_cdr = input_cdr_lusc, 
-  file_name = "input_iLINCS_LUSC"
-)
+inputs_ilincs(df_cdr = input_cdr_lusc, file_name = "input_iLINCS_LUSC")
 
 #Clue Query (CMap):
 inputs_clue(df_comun_luad, "LUAD")

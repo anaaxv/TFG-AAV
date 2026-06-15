@@ -24,8 +24,7 @@ invisible(lapply(paquetes_totales, library, character.only = TRUE))
 
 #FUNCIÓN PARA PROCESAR DATOS DE EXPRESIÓN:
 #Eliminación de duplicados, cruce con clínicos, quedarnos solo con dos tipos de muestras...
-procesar_expr<-function(expr, 
-                        clinical_patients){
+pretratamiento_expr<-function(expr, clinical_patients){
   #Extraer identificador de paciente:
   barcodes<-colnames(expr)
   patient_id<-substr(barcodes,1,12)
@@ -35,10 +34,8 @@ procesar_expr<-function(expr,
   sample_type_code<-substr(barcodes,14,15)
   colData(expr)$sample_type_code<-sample_type_code
   
-  sample_type<-case_when(
-    sample_type_code=="01"~"Tumor",
-    sample_type_code=="11"~"Normal"
-  )
+  sample_type<-case_when(sample_type_code=="01"~"Tumor",
+                         sample_type_code=="11"~"Normal")
   colData(expr)$sample_type<-sample_type
   expr<-expr[,!is.na(colData(expr)$sample_type)] #como solo guardamos los sample type de las 01 y 11, quitamos en las que no haya nada, porque podrán ser por ejemplo, 02 (tumor solido recurrente) que no nos interesan
   
@@ -56,12 +53,9 @@ procesar_expr<-function(expr,
   #Seleccionamos una muestra por paciente y por tipo de tumor (la de mayor library size, en este caso):
   #De cada paciente se guardarán como máximo los datos de dos muestras: una de tumor y una sana:
   samples_to_keep<-pull(
-    slice_max(
-      group_by(coldata_df, patient_id, sample_type),
-      order_by=library_size, n=1, with_ties=FALSE
-    ),
-    barcode
-  )
+    slice_max(group_by(coldata_df, patient_id, sample_type),
+              order_by=library_size, n=1, with_ties=FALSE),
+    barcode)
   
   #Nuestros datos de expresión sin duplicados:
   expr_unique<-expr[,samples_to_keep]
@@ -86,15 +80,10 @@ procesar_expr<-function(expr,
     unique()
   
   #se queda con todo menos con las muestras tumorales de pacientes pareados: 
-  expr_def<-expr_def[,!(
-    colData(expr_def)$patient_id %in% pareados & 
-      colData(expr_def)$sample_type=="Tumor"  
-  )]
+  expr_def<-expr_def[,!(colData(expr_def)$patient_id %in% pareados & 
+                          colData(expr_def)$sample_type=="Tumor")]
   
-  list(
-    expr_def=expr_def,
-    common_patients=common_patients
-  )
+  list(expr_def=expr_def,common_patients=common_patients)
   
 }
 
@@ -146,49 +135,32 @@ preprocess_edgeR<-function(expr_data,                    #Objeto Summarized Expe
   #Generamos los diferentes gráficos indicados por el usuario:
   if (plots$boxplot){   #el boxplot muestra que el rango de counts y las posiciones centrales son similares en muestras diferentes después de la normalizacion
     logCPM<-cpm(dgl, log=TRUE) #log-transformed counts per million
-    boxplot(logCPM, 
-            xaxt="n",
-            main=paste(plot_prefix, "- Normalized logCPM"),
-            xlab="Samples",
-            ylab="Log (normalized counts)")
+    boxplot(logCPM,xaxt="n",main=paste(plot_prefix, "- Normalized logCPM"),
+            xlab="Samples",ylab="Log (normalized counts)")
   }
   
   if (plots$mds) {
-    plotMDS(dgl, col=as.numeric(group), pch=16,
-            main=paste(plot_prefix, "- MDS Plot"))
-    legend("topright", legend=levels(group),
-           col=1:length(levels(group)),
-           pch=16)
+    plotMDS(dgl, col=as.numeric(group), pch=16,main=paste(plot_prefix, "- MDS Plot"))
+    legend("topright", legend=levels(group), col=1:length(levels(group)),pch=16)
   }
   
   if (plots$pca) {
     logCPM<-cpm(dgl, log=TRUE)
-    
     pca<-prcomp(t(logCPM), scale.=TRUE)
-    
-    pca_df<-data.frame(
-      PC1=pca$x[,1],
-      PC2=pca$x[,2],
-      group=group
-    )
+    pca_df<-data.frame(PC1=pca$x[,1], PC2=pca$x[,2], group=group)
     
     #Varianza explicada:
     var_expl<- round(100*pca$sdev^2/sum(pca$sdev^2),1) 
     
-    
     p<-ggplot(pca_df, aes(PC1,PC2,color=group))+
       geom_point(size=0.8)+
-      labs(title=paste(plot_prefix,"- PCA"),
-           x=paste0("PC1 (", var_expl[1],"%)"),
+      labs(title=paste(plot_prefix,"- PCA"), x=paste0("PC1 (", var_expl[1],"%)"),
            y=paste0("PC2 (", var_expl[2],"%)"))+
       theme_minimal()
     print(p)
   }
   
-  return(list(
-    dgl=dgl,
-    group=group
-  ))
+  return(list(dgl=dgl,group=group))
 }
 
 analysis_edgeR<-function(dgl,
@@ -241,11 +213,8 @@ analysis_edgeR<-function(dgl,
     
     volcano_df<-all_results
     volcano_df$DEG<-"Not significant"
-    volcano_df$DEG[volcano_df$logFC > lfc_threshold &
-                     volcano_df$FDR<fdr_threshold]<-"Up"
-    
-    volcano_df$DEG[volcano_df$logFC < -lfc_threshold &
-                     volcano_df$FDR<fdr_threshold]<-"Down"
+    volcano_df$DEG[volcano_df$logFC > lfc_threshold & volcano_df$FDR<fdr_threshold]<-"Up"
+    volcano_df$DEG[volcano_df$logFC < -lfc_threshold & volcano_df$FDR<fdr_threshold]<-"Down"
  
     volcano_df <- volcano_df %>% 
       dplyr::filter(gene_type == "protein_coding")
@@ -266,26 +235,21 @@ analysis_edgeR<-function(dgl,
     
     p<-ggplot(volcano_df, aes(x=logFC, y=-log10(FDR), color=DEG))+
       geom_point(alpha=0.7,size=1.2)+
-      scale_color_manual(values=c(
-        "Not significant"="grey", "Up"="firebrick3", "Down"="dodgerblue3"))+
-      geom_vline(xintercept=c(-lfc_threshold, lfc_threshold),
-                 linetype="dashed", color="black")+
-      geom_hline(yintercept=-log10(fdr_threshold),
-                 linetype="dashed", color= "black")+
-      geom_text_repel(
-        data=top_genes,
-        aes(label=gene_name),
-        size=2.5,
-        nudge_y = 0.5,
-        direction="both",
-        point.padding = 0.2,
-        box.padding = 0.4,          
-        min.segment.length = 0,
-        segment.size = 0.2,
-        max.overlaps = Inf,
-        seed=42,
-        show.legend = FALSE
-      )+
+      scale_color_manual(values=c("Not significant"="grey", "Up"="firebrick3", "Down"="dodgerblue3"))+
+      geom_vline(xintercept=c(-lfc_threshold, lfc_threshold),linetype="dashed", color="black")+
+      geom_hline(yintercept=-log10(fdr_threshold),linetype="dashed", color= "black")+
+      geom_text_repel(data=top_genes,
+                      aes(label=gene_name),
+                      size=2.5,
+                      nudge_y = 0.5,
+                      direction="both",
+                      point.padding = 0.2,
+                      box.padding = 0.4,          
+                      min.segment.length = 0,
+                      segment.size = 0.2,
+                      max.overlaps = Inf,
+                      seed=42,
+                      show.legend = FALSE)+
       labs(title=paste(plot_prefix,"- Volcano Plot (Protein-Coding)"),
            x="Log2 Fold Change",
            y="-Log10 FDR")+
@@ -317,17 +281,15 @@ analysis_edgeR<-function(dgl,
     rownames(annotation_col) <- colnames(heatmap_data)
     
     #Dibujamos el heatmap:
-    pheatmap::pheatmap(
-      heatmap_data, 
-      scale = "row", 
-      annotation_col = annotation_col,
-      show_rownames = (nrow(heatmap_data) < 50), #Mostrar nombres si son pocos
-      show_colnames = FALSE,
-      cluster_cols = FALSE,           #Mantiene el orden Normal vs Tumor
-      cluster_rows = TRUE,            
-      clustering_distance_rows = "correlation", 
-      main = paste(plot_prefix, "- Heatmap")
-    )
+    pheatmap::pheatmap(heatmap_data,
+                       scale = "row", 
+                       annotation_col = annotation_col,
+                       show_rownames = (nrow(heatmap_data) < 50), #Mostrar nombres si son pocos
+                       show_colnames = FALSE,
+                       cluster_cols = FALSE,           #Mantiene el orden Normal vs Tumor
+                       cluster_rows = TRUE,            
+                       clustering_distance_rows = "correlation", 
+                       main = paste(plot_prefix, "- Heatmap"))
   }
   
   #Creamos carpeta de resultados:
@@ -340,33 +302,24 @@ analysis_edgeR<-function(dgl,
   }
   
   write.table(significant,
-              file=file.path(results_folder,
-                             paste0(plot_prefix,"_DEGs.txt")),
-              quote=FALSE,
-              sep="\t",
-              row.names=FALSE)
+              file=file.path(results_folder, paste0(plot_prefix,"_DEGs.txt")),
+              quote=FALSE, sep="\t", row.names=FALSE)
   
-  write.table(all_results,
-              file=file.path(results_folder,
-                             paste0(plot_prefix,"_all_genes.txt")),
-              quote=FALSE,
-              sep="\t",
-              row.names=FALSE)
+  write.table(all_results, file=file.path(results_folder, paste0(plot_prefix,"_all_genes.txt")),
+              quote=FALSE,sep="\t",row.names=FALSE)
   
   #Guardamos los genes significativos que codifiquen para proteína:
   significant_pc <- significant[significant$gene_type == "protein_coding" & !is.na(significant$gene_type), ]
   up_pc <- significant_pc[significant_pc$logFC > 0, ]
   down_pc <- significant_pc[significant_pc$logFC < 0, ]
   
-  return(list(
-    all_genes=all_results,
-    significant=significant,
-    up_genes=up,
-    down_genes=down,
-    significant_pc=significant_pc,
-    up_genes_pc=up_pc,
-    down_genes_pc=down_pc
-  ))
+  return(list(all_genes=all_results,
+              significant=significant,
+              up_genes=up,
+              down_genes=down,
+              significant_pc=significant_pc,
+              up_genes_pc=up_pc,
+              down_genes_pc=down_pc))
 }
 
 complete_edgeR_analysis<-function(expr_data,
@@ -379,24 +332,20 @@ complete_edgeR_analysis<-function(expr_data,
                                   base_folder="data",
                                   plot_prefix="Edge R"){
   #Preprocesamiento:
-  pre<-preprocess_edgeR(
-    expr_data=expr_data,
-    group_variable=group_variable,
-    reference_level=reference_level,
-    plots=preprocess_plots,
-    plot_prefix = plot_prefix
-  )
+  pre<-preprocess_edgeR(expr_data=expr_data,
+                        group_variable=group_variable,
+                        reference_level=reference_level,
+                        plots=preprocess_plots,
+                        plot_prefix = plot_prefix)
   
   #Análisis diferencial:
-  results<-analysis_edgeR(
-    dgl=pre$dgl,
-    group=pre$group,
-    lfc_threshold=lfc_threshold,
-    fdr_threshold=fdr_threshold,
-    plots=analysis_plots,
-    base_folder=base_folder,
-    plot_prefix = plot_prefix
-  )
+  results<-analysis_edgeR(dgl=pre$dgl,
+                          group=pre$group,
+                          lfc_threshold=lfc_threshold,
+                          fdr_threshold=fdr_threshold,
+                          plots=analysis_plots,
+                          base_folder=base_folder,
+                          plot_prefix = plot_prefix)
   return(results)
 }
 
@@ -467,19 +416,14 @@ analysis_voom<-function(expr_data,
   if (plots$pca) {
     pca <- prcomp(t(v$E), scale.=TRUE)
     
-    pca_df <- data.frame(
-      PC1 = pca$x[,1],
-      PC2 = pca$x[,2],
-      group = group
-    )
+    pca_df <- data.frame(PC1 = pca$x[,1], PC2 = pca$x[,2], group = group)
     
     # Varianza explicada:
     var_expl <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1) 
     
     p_pca <- ggplot(pca_df, aes(PC1, PC2, color=group)) +
       geom_point(size=0.8) +
-      labs(title=paste(plot_prefix, "- PCA"),
-           x=paste0("PC1 (", var_expl[1], "%)"),
+      labs(title=paste(plot_prefix, "- PCA"), x=paste0("PC1 (", var_expl[1], "%)"),
            y=paste0("PC2 (", var_expl[2], "%)")) +
       theme_minimal()
     
@@ -586,15 +530,13 @@ analysis_voom<-function(expr_data,
   up_pc <- significant_pc[significant_pc$DEG == "Up", ]
   down_pc <- significant_pc[significant_pc$DEG == "Down", ]
   
-  return(list(
-    all_genes=results,
-    significant=significant,
-    up_genes=up_genes,     
-    down_genes=down_genes,
-    significant_pc = significant_pc,
-    up_genes_pc = up_pc,
-    down_genes_pc = down_pc
-  ))
+  return(list(all_genes=results,
+              significant=significant,
+              up_genes=up_genes,     
+              down_genes=down_genes,
+              significant_pc = significant_pc,
+              up_genes_pc = up_pc,
+              down_genes_pc = down_pc))
 }
 #__________
 #Gráfica de distribución de DEGS:
@@ -663,11 +605,9 @@ plot_deg_distribution <- function(cancers = c("LUAD", "LUSC"),
   
   #Formateo de posiciones y etiquetas
   df_general <- df_general %>%
-    mutate(
-      Metodo_num = ifelse(Metodo == "EdgeR", 1, 2),
-      X_pos = ifelse(Regulacion == "Up", Metodo_num - 0.2, Metodo_num + 0.2),
-      Etiqueta = paste0(Total_Label, "\n(", PC_Label, ")")
-    )
+    mutate(Metodo_num = ifelse(Metodo == "EdgeR", 1, 2),
+           X_pos = ifelse(Regulacion == "Up", Metodo_num - 0.2, Metodo_num + 0.2),
+           Etiqueta = paste0(Total_Label, "\n(", PC_Label, ")"))
   
   df_general$Tipo_Gene <- factor(df_general$Tipo_Gene, levels = c("Protein Coding", "Otros DEGs"))
   
@@ -705,38 +645,21 @@ generar_venn_comparativo <- function(res_edgeR, res_voom, tipo_cancer="LUAD", ba
   voom_up    <- res_voom$up_genes$id_cruce
   voom_down  <- res_voom$down_genes$id_cruce
   
-  lista_up <- list(
-    "edgeR (Up)" = edger_up,
-    "Voom (Up)"  = voom_up
-  )
-  
-  lista_down <- list(
-    "edgeR (Down)" = edger_down,
-    "Voom (Down)"  = voom_down
-  )
+  lista_up <- list("edgeR (Up)" = edger_up, "Voom (Up)"  = voom_up)
+  lista_down <- list("edgeR (Down)" = edger_down,"Voom (Down)"  = voom_down)
   
   colores <- c("firebrick3", "orange")
   colores_down <- c("dodgerblue3", "turquoise3")
   
   #Grafica UP
-  p_up <- ggvenn(
-    lista_up, 
-    fill_color = colores,
-    stroke_size = 0.5, 
-    set_name_size = 4,  
-    text_size = 3
-  ) + 
+  p_up <- ggvenn(lista_up,fill_color = colores,stroke_size = 0.5, 
+    set_name_size = 4,text_size = 3) + 
     labs(title = paste0(tipo_cancer, " - Genes Sobreexpresados (UP)")) +
     theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12))
   
   #Grafica DOWN
-  p_down <- ggvenn(
-    lista_down, 
-    fill_color = colores_down,
-    stroke_size = 0.5, 
-    set_name_size = 4,   
-    text_size = 3
-  ) + 
+  p_down <- ggvenn(lista_down,fill_color = colores_down,stroke_size = 0.5, 
+    set_name_size = 4,text_size = 3) + 
     labs(title = paste0(tipo_cancer, " - Genes Infraexpresados (DOWN)")) +
     theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 12)) 
   
@@ -749,8 +672,7 @@ generar_venn_comparativo <- function(res_edgeR, res_voom, tipo_cancer="LUAD", ba
   ggsave(file.path(output_dir, paste0(tipo_cancer, "_Venn_UP.png")), plot=p_up, width=6, height=5, dpi=300)
   ggsave(file.path(output_dir, paste0(tipo_cancer, "_Venn_DOWN.png")), plot=p_down, width=6, height=5, dpi=300)
   
-  return(list(
-    shared_up = intersect(edger_up, voom_up),
+  return(list(shared_up = intersect(edger_up, voom_up),
     shared_down = intersect(edger_down, voom_down)
   ))
 }
@@ -786,10 +708,8 @@ inputs_shinyDeepDR<-function(expr_data, file_name, folder=here("data","analysis"
   #nombres de los genes:
   info_genes <- as.data.frame(rowData(expr_tumor))
   
-  df_shiny <- data.frame(
-    Gene = info_genes$gene_name,
-    Promedio_Tumoral = mediana_tpm
-  )
+  df_shiny <- data.frame(Gene = info_genes$gene_name,
+                         Promedio_Tumoral = mediana_tpm)
   
   #Eliminamos NAs:
   df_shiny <- df_shiny[!is.na(df_shiny$Gene), ]
@@ -828,11 +748,7 @@ inputs_cdrpipe<-function(df_degs, file_name, folder=here("data","analysis","inpu
   
   #Seleccionamos y renombramos las columnas según lo que pide CDRpipe:
   df_cdr <- df_degs %>%
-    dplyr::select(
-      SYMBOL = gene_name,
-      log2FC_1 = logFC,
-      p_val_adj = all_of(col_pval)
-    )
+    dplyr::select(SYMBOL = gene_name,log2FC_1 = logFC,p_val_adj = all_of(col_pval))
   
   #Limpieza de NAs
   df_cdr <- df_cdr %>% filter(!is.na(SYMBOL) & SYMBOL != "")
@@ -866,14 +782,8 @@ inputs_ilincs <- function(df_cdr, file_name, folder = here("data","analysis","in
   ruta_salida_ilincs <- file.path(folder, paste0(file_name, ".txt"))
   
   #Guardamos en formato TXT delimitado por tabuladores (\t)
-  write.table(
-    df_cdr, 
-    file = ruta_salida_ilincs, 
-    sep = "\t", 
-    row.names = FALSE, 
-    col.names = FALSE, #sin nombres de columna
-    quote = FALSE
-  )
+  write.table(df_cdr, file = ruta_salida_ilincs, sep = "\t", 
+    row.names = FALSE, col.names = FALSE, quote = FALSE)
   cat("Archivo para iLINCS guardado en:", ruta_salida_ilincs, "\n")
 }
 
@@ -913,12 +823,10 @@ analizar_resultados_clue <- function(ruta_gct, nombre_archivo, folder= here("dat
   # O seleccionamos la columna 'summary' si existe.
   ncs_promedio <- rowMeans(scores_ncs) 
   
-  tabla_resultados <- data.frame(
-    Nombre_Farmaco = metadatos_farmacos$pert_iname,
+  tabla_resultados <- data.frame(Nombre_Farmaco = metadatos_farmacos$pert_iname,
     Mecanismo_Accion = metadatos_farmacos$moa,
     Target = metadatos_farmacos$target_name,
-    NCS = ncs_promedio 
-  )
+    NCS = ncs_promedio)
   
   # Filtro de calidad: Solo fármacos con impacto real (NCS < -1.5 es un estándar común)
   mis_candidatos <- tabla_resultados %>%
