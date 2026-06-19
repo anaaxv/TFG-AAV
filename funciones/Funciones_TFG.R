@@ -517,7 +517,7 @@ analysis_voom<-function(expr_data,
   
   #Guardamos DEGs significativos:
   write.table(significant, 
-              file=file.path(results_folder, paste0(plot_prefix, "_DEGs_.txt")),
+              file=file.path(results_folder, paste0(plot_prefix, "_DEGs.txt")),
               quote=FALSE, sep="\t", row.names=FALSE) 
   
   # Guardamos tabla completa:
