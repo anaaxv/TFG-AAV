@@ -151,7 +151,7 @@ BiocManager::install("TCGAbiolinks")
 
 ------------------------------------------------------------------------
 
-## Uso
+## Instrucciones de ejecución
 
 1.  Clona el repositorio y abre el proyecto en RStudio.
 2.  Asegúrate de tener conexión a internet para la descarga de datos del GDC (Bloque 1).
