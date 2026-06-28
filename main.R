@@ -109,7 +109,7 @@ common_patients_LUAD<-res_LUAD$common_patients
 saveRDS(expr_LUAD_def,"data/expr_LUAD_def.rds")
 saveRDS(common_patients_LUAD, "data/common_patients_LUAD.rds")
 
-rm(expr_LUAD_raw, res_LUAD, common_patients_LUAD)
+rm(expr_LUAD_raw, res_LUAD, common_patients_LUAD, clinical_LUAD_BCRtab)
 gc()
 
 #LUSC:
@@ -122,7 +122,7 @@ common_patients_LUSC<-res_LUSC$common_patients
 saveRDS(expr_LUSC_def,"data/expr_LUSC_def.rds")
 saveRDS(common_patients_LUSC, "data/common_patients_LUSC.rds")
 
-rm(expr_LUSC_raw,res_LUSC,common_patients_LUSC)
+rm(expr_LUSC_raw,res_LUSC,common_patients_LUSC, clinical_LUSC_BCRtab)
 gc()
 
 #________________________________________________________________________
